@@ -1,0 +1,130 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apple Watch Sleep Score vs a recovery score</title>
+<meta name="description" content="Apple Watch Sleep Score explained: duration, consistency and interruption points, the five bands, what Vitals shows, and why it isn't a recovery score.">
+<link rel="canonical" href="https://jaygosalia4.github.io/axon-support/guides/apple-watch-sleep-score-vs-recovery-score/">
+<meta property="og:type" content="article"><meta property="og:title" content="Apple Watch Sleep Score vs a recovery score"><meta property="og:description" content="Apple Watch Sleep Score explained: duration, consistency and interruption points, the five bands, what Vitals shows, and why it isn't a recovery score."><meta property="og:url" content="https://jaygosalia4.github.io/axon-support/guides/apple-watch-sleep-score-vs-recovery-score/">
+<link rel="stylesheet" href="../../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "Apple Watch Sleep Score vs a recovery score",
+      "description": "Apple Watch Sleep Score explained: duration, consistency and interruption points, the five bands, what Vitals shows, and why it isn't a recovery score.",
+      "datePublished": "2026-09-12",
+      "dateModified": "2026-09-12",
+      "author": { "@type": "Organization", "name": "Axon" },
+      "publisher": { "@type": "Organization", "name": "Axon" },
+      "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/guides/apple-watch-sleep-score-vs-recovery-score/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Which Apple Watch models get Sleep Score?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Sleep Score isn't tied to the newest hardware. It's a watchOS 26 software feature, so any Apple Watch that can run watchOS 26 gets it — Series 6 and later, Apple Watch SE (2nd generation) and later, and Ultra models, paired with an iPhone 11 or later on iOS 26. You don't need a Series 11 or Ultra 3."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does Axon's sleep score differ from Apple's?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Because the two scores weigh different things. Apple's Sleep Score is built from duration (up to 50 points), bedtime consistency (up to 30) and interruptions (up to 20). Axon's Sleep score is computed separately, from the same HealthKit data, using five weighted components: duration, efficiency, deep sleep, REM sleep and consistency. Different inputs and different math can legitimately produce different numbers for the same night — both are reading the same underlying data, just scoring different aspects of it."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does Apple Watch have a recovery score?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not a \"recovery\" score by that name — but as of watchOS 27, Apple does have a native readiness score, exclusive to Apple Watch Series 12 and Ultra 4. It's a 0–10 daily number with a plain recommendation (Recover, Pace Yourself, Ready, or Go For It), built from recent activity, vitals and Sleep Score. Every earlier Watch — Series 4 through 11, SE and Ultra 1–3 — doesn't get it; Vitals on those Watches shows Recovery HRV against your baseline as one metric among several, not a combined score. Axon's Recovery and Readiness scores work on any Series 4-and-later Watch."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need to wear the Watch overnight?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, for both. Apple's Sleep Score and Vitals readings, and Axon's Sleep, Recovery and Readiness scores, all depend on overnight Apple Watch data — heart rate, HRV, movement and, where supported, blood oxygen and wrist temperature. Without overnight wear, Apple has nothing to score and Axon shows an honest \"—\" rather than a guessed number."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<header><a class="logo" href="../../"><div class="logo-dot"></div>Axon</a><nav><a href="../">Guides</a><a href="../../#faq">FAQ</a><a href="../../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
+<main>
+<p class="eyebrow">Guides</p>
+<h1>Apple Watch Sleep Score vs a recovery score</h1>
+<p class="lede">Apple Watch Sleep Score explained: what it measures, what the five bands mean, what the Vitals app adds — and why neither one tells you whether your body has recovered.</p>
+<p class="meta">By the Axon team · Updated 12 September 2026 · Prices are US App Store, September 2026</p>
+<div class="answer"><p><strong>Quick answer.</strong> The Apple Watch Sleep Score (watchOS 26) grades one thing: how you slept, scored 0–100 from duration, bedtime consistency and interruptions. As of watchOS 27, Apple Watch Series 12 and Ultra 4 also get a native readiness score (0–10, with a plain recommendation) — but every earlier Watch, Series 4 through 11, SE and Ultra 1–3, doesn't get it. No Apple Watch publishes a combined "recovery" score by that name; Vitals now shows Recovery HRV against your personal baseline as one metric, not a single verdict. Axon computes its own Sleep score from the same Apple Watch data (which can read differently from Apple's, on purpose), plus Recovery and Readiness scores that work on any Apple Watch Series 4 and later — a complement to Apple's Sleep Score, not a replacement for it.</p></div>
+
+<h2>How the Apple Watch Sleep Score works</h2>
+<p>Introduced in watchOS 26, the Apple Watch Sleep Score grades each night out of 100 using three components:</p>
+<div class="table-wrap"><table>
+<tr><th>Component</th><th>Points</th></tr>
+<tr><td>Duration</td><td>up to 50</td></tr>
+<tr><td>Bedtime consistency</td><td>up to 30</td></tr>
+<tr><td>Interruptions</td><td>up to 20</td></tr>
+</table></div>
+<p>Apple sorts the result into five bands, refined in the watchOS 26.2 update:</p>
+<div class="table-wrap"><table>
+<tr><th>Score</th><th>Band</th></tr>
+<tr><td>0–40</td><td>Very Low</td></tr>
+<tr><td>41–60</td><td>Low</td></tr>
+<tr><td>61–80</td><td>OK</td></tr>
+<tr><td>81–95</td><td>High</td></tr>
+<tr><td>96–100</td><td>Very High</td></tr>
+</table></div>
+<p>Sleep Score is a software feature tied to watchOS 26, not to the newest hardware — it runs on any Apple Watch that can update to watchOS 26 (Series 6 and later, SE 2nd generation and later, and Ultra), not only the current-generation Series 11 or Ultra 3.</p>
+
+<h2>What the Vitals app shows</h2>
+<p>Alongside Sleep Score, Apple's Vitals app displays your overnight heart rate, respiratory rate, wrist temperature, blood oxygen (on supported models) and sleep duration. It establishes a typical range for each metric from your own history and compares each night's readings against that range — it will notify you when multiple metrics fall outside your typical range at once, with context on possible causes like medication, altitude change or illness. As of watchOS 27, Vitals also includes Recovery HRV, analyzed against your personal baseline, alongside its existing overnight metrics, plus Training Load (watchOS 11 and later), a separate view of how your recent workout intensity has been trending.</p>
+
+<h2>What neither one tells you — unless you have the newest Watch</h2>
+<p>For most Apple Watch owners, Sleep Score tells you how last night went and Vitals tells you which individual overnight numbers were unusual — neither combines them into a single, actionable call. watchOS 27 closes part of that gap on new hardware only: Apple Watch Series 12 and Ultra 4 get a native readiness feature that analyzes recent activity, vitals and Sleep Score together and returns one daily 0–10 number with a plain recommendation — Recover, Pace Yourself, Ready, or Go For It. Series 4 through 11, SE, and every earlier Ultra don't get it, and keep only Sleep Score and Vitals. For everyone on an earlier Watch, that synthesis is exactly the gap third-party apps, Axon included, exist to fill.</p>
+
+<h2>How a recovery score differs from a sleep score</h2>
+<p>A recovery or readiness score starts from a different question. Instead of asking "how did I sleep," it asks "how ready is my body for today," and it answers that using signals a sleep score doesn't touch: heart rate variability and resting heart rate, both compared against your own recent baseline rather than scored on an absolute scale. A great night's sleep can still sit alongside a suppressed HRV reading — from training load, stress, illness, or alcohol — and a genuine recovery score will reflect that, where a sleep-only score can't. See our companion guide, <a href="../readiness-score-explained/">readiness score explained</a>, for how that combination works in practice.</p>
+
+<h2>Where Axon fits</h2>
+<p>Axon is built to sit alongside Apple's own tools, not replace them. It reads the same on-device HealthKit data — sleep stages, heart rate, HRV, respiratory rate, blood oxygen, wrist temperature — and computes a Recovery score and a live Readiness score, from HRV and resting heart rate against your own 30-day baseline, your sleep, and your recent training load. The difference from Apple's native readiness feature is reach: Axon's Recovery and Readiness work on any Apple Watch Series 4 and later, including the many generations of Watch that don't qualify for Apple's Series-12-and-Ultra-4-only readiness score.</p>
+<p>Axon also computes its own Sleep score, separately from Apple's. It's built from five weighted components — duration, sleep efficiency, deep sleep, REM sleep and consistency — rather than Apple's duration/consistency/interruptions split. Because the two scores are genuinely different models reading the same night, they can land on different numbers for the same sleep. Neither is "wrong" — they're measuring different aspects of the same data and weighting them differently. Where Apple's Sleep Score stops, Axon's Recovery and Readiness scores pick up: they're the "what does this mean for today" layer Apple's own apps don't provide. Get the free <a href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-apple-watch-sleep-score-vs-recovery-score&mt=8">Axon app on the App Store</a> to see both alongside each other.</p>
+
+<div class="cta"><h2>Recovery and Readiness from the Apple Watch you already wear</h2><p>Four daily scores, computed on your iPhone. Free. No strap, no subscription.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-apple-watch-sleep-score-vs-recovery-score&mt=8">Get Axon on the App Store</a></div>
+
+<section class="faq" id="faq">
+<div class="faq-item"><p class="faq-q">Which Apple Watch models get Sleep Score?</p><p class="faq-a">Sleep Score isn't tied to the newest hardware. It's a watchOS 26 software feature, so any Apple Watch that can run watchOS 26 gets it — Series 6 and later, Apple Watch SE (2nd generation) and later, and Ultra models, paired with an iPhone 11 or later on iOS 26. You don't need a Series 11 or Ultra 3.</p></div>
+<div class="faq-item"><p class="faq-q">Why does Axon's sleep score differ from Apple's?</p><p class="faq-a">Because the two scores weigh different things. Apple's Sleep Score is built from duration (up to 50 points), bedtime consistency (up to 30) and interruptions (up to 20). Axon's Sleep score is computed separately, from the same HealthKit data, using five weighted components: duration, efficiency, deep sleep, REM sleep and consistency. Different inputs and different math can legitimately produce different numbers for the same night — both are reading the same underlying data, just scoring different aspects of it.</p></div>
+<div class="faq-item"><p class="faq-q">Does Apple Watch have a recovery score?</p><p class="faq-a">Not a "recovery" score by that name — but as of watchOS 27, Apple does have a native readiness score, exclusive to Apple Watch Series 12 and Ultra 4. It's a 0–10 daily number with a plain recommendation (Recover, Pace Yourself, Ready, or Go For It), built from recent activity, vitals and Sleep Score. Every earlier Watch — Series 4 through 11, SE and Ultra 1–3 — doesn't get it; Vitals on those Watches shows Recovery HRV against your baseline as one metric among several, not a combined score. Axon's Recovery and Readiness scores work on any Series 4-and-later Watch.</p></div>
+<div class="faq-item"><p class="faq-q">Do I need to wear the Watch overnight?</p><p class="faq-a">Yes, for both. Apple's Sleep Score and Vitals readings, and Axon's Sleep, Recovery and Readiness scores, all depend on overnight Apple Watch data — heart rate, HRV, movement and, where supported, blood oxygen and wrist temperature. Without overnight wear, Apple has nothing to score and Axon shows an honest "—" rather than a guessed number.</p></div>
+</section>
+
+<div class="related"><h2>Related guides</h2><ul>
+<li><a href="../best-whoop-alternatives/">Best WHOOP alternatives in 2026 (no strap, no subscription)</a></li>
+<li><a href="../apple-watch-recovery-score-without-whoop/">How to get a recovery score on Apple Watch — without WHOOP</a></li>
+<li><a href="../readiness-score-explained/">Readiness score explained: what it measures and how to read it</a></li>
+<li><a href="../athlytic-vs-axon/">Athlytic vs Axon</a></li>
+<li><a href="../bevel-vs-axon/">Bevel vs Axon</a></li>
+</ul></div>
+
+<div class="sources"><strong>Sources</strong><ol>
+<li>AppleInsider — <a href="https://appleinsider.com/articles/25/09/12/how-sleep-score-works-on-apple-watch-with-watchos-26" target="_blank">How Sleep Score works on Apple Watch with watchOS 26</a></li>
+<li>MacRumors — <a href="https://www.macrumors.com/2025/09/10/watchos-26-sleep-score/" target="_blank">You Don't Need the Apple Watch Series 11 to Get Your Sleep Score</a></li>
+<li>MacRumors — <a href="https://www.macrumors.com/2025/11/04/watchos-26-2-updates-sleep-score-ranges/" target="_blank">iOS 26.2 and watchOS 26.2 Update Sleep Score Ranges</a></li>
+<li>Apple — <a href="https://support.apple.com/guide/watch/vitals-apd15aa7ed96/watchos" target="_blank">Vitals app on Apple Watch</a></li>
+<li>Apple — <a href="https://support.apple.com/guide/watch/track-your-sleep-apd830528336/watchos" target="_blank">Track your sleep on Apple Watch</a></li>
+<li>Apple Newsroom — <a href="https://www.apple.com/newsroom/2026/09/apple-advances-health-and-fitness-capabilities-using-apple-intelligence/" target="_blank">Apple advances health and fitness capabilities using Apple Intelligence</a> (Sep 9, 2026)</li>
+</ol></div>
+</main>
+<footer><span>© 2026 Axon</span><span><a href="../../">Support</a> · <a href="../">Guides</a> · <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">Privacy</a></span></footer>
+</body></html>

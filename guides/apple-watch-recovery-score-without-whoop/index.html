@@ -1,0 +1,130 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Get a Recovery Score on Apple Watch (No WHOOP)</title>
+<meta name="description" content="How to get a real recovery score on Apple Watch without WHOOP: what the Watch measures overnight, why Apple doesn't show one, and how to set it up with Axon.">
+<link rel="canonical" href="https://jaygosalia4.github.io/axon-support/guides/apple-watch-recovery-score-without-whoop/">
+<meta property="og:type" content="article"><meta property="og:title" content="Get a Recovery Score on Apple Watch (No WHOOP)"><meta property="og:description" content="How to get a real recovery score on Apple Watch without WHOOP: what the Watch measures overnight, why Apple doesn't show one, and how to set it up with Axon."><meta property="og:url" content="https://jaygosalia4.github.io/axon-support/guides/apple-watch-recovery-score-without-whoop/">
+<link rel="stylesheet" href="../../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "How to Get a Recovery Score on Apple Watch, Without WHOOP",
+      "datePublished": "2026-09-12",
+      "dateModified": "2026-09-12",
+      "author": { "@type": "Organization", "name": "Axon" },
+      "publisher": { "@type": "Organization", "name": "Axon" },
+      "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/guides/apple-watch-recovery-score-without-whoop/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Can I get a recovery score on Apple Watch without buying WHOOP or Oura?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Your Apple Watch already measures the signals a recovery score needs — heart rate variability, resting heart rate, sleep, respiratory rate, and on newer models blood oxygen and wrist temperature. A free app like Axon reads that data through Apple Health and computes a Recovery score on your iPhone, with no extra hardware." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why doesn't Apple Watch show a recovery score by itself?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Apple's Vitals app shows your overnight readings against your own baselines and, from watchOS 27, a Recovery HRV reading — but it does not produce a recovery score on any model. Apple's new Readiness score (announced 9 September 2026) is limited to the Series 12 and Ultra 4. On a Series 4 through 11, SE or earlier Ultra, a recovery or readiness number comes from an app such as Axon." }
+        },
+        {
+          "@type": "Question",
+          "name": "How long until my recovery score is accurate?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Expect roughly a week of overnight Apple Watch wear before HRV- and resting-heart-rate-based scores move past a 'building baseline' placeholder. Respiratory rate draws on a rolling 30-day window, so its contribution takes closer to a month to fully settle." }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need to wear my Apple Watch to sleep every night?",
+          "acceptedAnswer": { "@type": "Answer", "text": "You need it overnight for Recovery and Readiness specifically — those scores are built from overnight HRV, resting heart rate and sleep data. Miss a night and Axon shows an honest gap rather than a guessed number; it never fabricates a reading." }
+        },
+        {
+          "@type": "Question",
+          "name": "Which Apple Watch models support a full recovery score?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Axon needs an iPhone on iOS 17 or later paired with an Apple Watch Series 4 or later, SE, or Ultra. Blood-oxygen readings need a Series 6 or later; wrist-temperature readings need a Series 8 or later. Without those specific sensors, the relevant row simply shows as unavailable rather than a fabricated value." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<header><a class="logo" href="../../"><div class="logo-dot"></div>Axon</a><nav><a href="../">Guides</a><a href="../../#faq">FAQ</a><a href="../../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
+<main>
+<p class="eyebrow">How-To</p>
+<h1>How to Get a Recovery Score on Apple Watch, Without WHOOP</h1>
+<p class="lede">Your Apple Watch already collects most of what a recovery score needs overnight. Here's what it measures, why Apple stops short of scoring it, and the step-by-step to turn it into a real recovery score on Apple Watch — no strap, no subscription.</p>
+<p class="meta">By the Axon team · Updated 12 September 2026 · Prices are US App Store, September 2026</p>
+<div class="answer"><p><strong>Quick answer.</strong> You don't need new hardware. Wear your Apple Watch overnight, install a free scoring app like Axon, grant it access to Health data, and give it about a week: Axon combines your HRV, resting heart rate, sleep and respiratory rate against your own baseline into a daily Recovery score, computed on your iPhone.</p></div>
+
+<h2>What your Apple Watch already measures overnight</h2>
+<p>While you sleep, Apple Watch is already collecting the raw signals a recovery score is built from:</p>
+<ul>
+<li><strong>Heart rate variability (HRV)</strong> — the beat-to-beat variation in your heart rhythm, generally lower under physical or mental strain.</li>
+<li><strong>Resting heart rate</strong> — your lowest sustained heart rate, tracked as a 30-day rolling baseline rather than a single-night reading.</li>
+<li><strong>Respiratory rate</strong> — breaths per minute while asleep, tracked against a rolling 30-day personal baseline.</li>
+<li><strong>Wrist temperature</strong> — on Series 8 and later, a night-over-night deviation from your own baseline (not an absolute body-temperature reading).</li>
+<li><strong>Blood oxygen (SpO₂)</strong> — on Series 6 and later, overnight oxygen saturation.</li>
+<li><strong>Sleep stages and duration</strong> — time in bed, time asleep, and (with the Watch worn) core/deep/REM stages.</li>
+</ul>
+<p>These are exactly the categories WHOOP and Oura build their recovery models from. The sensors are already on your wrist.</p>
+
+<h2>Why Apple shows Vitals but (on most watches) no recovery or readiness number</h2>
+<p>Open the Vitals app on Apple Watch and you'll see each of those readings listed individually, marked typical or outside your usual range; from watchOS 27 (14 September 2026) it also shows a Recovery HRV reading against your personal baseline. Apple stops there for most owners. On 9 September 2026 Apple announced a native Readiness score that combines recent activity, vitals and sleep and updates through the day — but it requires the new Apple Watch Series 12 or Ultra 4 with the Health Sensing System. Series 4–11, SE and earlier Ultra models do not get it, and no Apple Watch has a recovery score. For everyone on those watches, the single number that says what the dials add up to today is the layer a dedicated recovery app adds.</p>
+
+<h2>What a recovery score needs: a personal baseline</h2>
+<p>A recovery score only means something relative to <em>your</em> normal. A resting heart rate of 58 bpm is unremarkable for one person and a warning sign for another — the number only becomes informative once an app knows what's typical for you specifically. That's why every recovery-scoring app, Axon included, needs a run-up period before its numbers are meaningful, and it's worth being upfront about how long:</p>
+<ul>
+<li><strong>HRV and resting heart rate:</strong> Axon needs roughly a week (about 7 nights) of overnight Watch wear before it has enough history to move past a "building baseline" placeholder and start scoring against your personal pattern.</li>
+<li><strong>Respiratory rate:</strong> this contributes through a rolling 30-day personal baseline, so its role in your Recovery score takes closer to a month to fully settle in.</li>
+</ul>
+<p>Until a baseline is established, Axon shows an honest placeholder rather than guessing — a filled-in number before there's enough data behind it would be a worse outcome than an honest "still building your baseline."</p>
+
+<h2>Recovery score on Apple Watch: step-by-step with Axon</h2>
+<ol>
+<li><strong>Install <a href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-apple-watch-recovery-score-without-whoop&mt=8">Axon</a></strong> from the App Store — it's free, with no account required to start.</li>
+<li><strong>Grant Health access</strong> when prompted, so Axon can read the HRV, heart rate, sleep, respiratory rate and (where supported) SpO₂ and wrist-temperature data your Watch already collects. This data is read-only and stays on your iPhone by default.</li>
+<li><strong>Wear your Apple Watch to sleep</strong> for the next several nights. Recovery and Readiness are both built from overnight data — a night without the Watch on is a night without a fresh reading for those scores.</li>
+<li><strong>Check your Home screen each morning.</strong> Sleep and Strain can show real numbers from day one; Recovery and Readiness will show a building-baseline state until enough nights have accumulated.</li>
+<li><strong>Let respiratory rate catch up over the following weeks.</strong> Everything else keeps working in the meantime — RR is one contributor among several, not a gate on the whole score.</li>
+</ol>
+
+<h2>What to expect in week one</h2>
+<p>Day one, Axon can already show Sleep and Strain, since those don't need a personal history to compute. Recovery and Readiness will look different: for roughly the first week, expect a "building baseline" placeholder in place of a number — that's Axon declining to invent a score rather than a bug. By the end of week one, if you've worn the Watch overnight consistently, HRV- and resting-heart-rate-driven scores should start appearing and refining night over night. Respiratory rate keeps contributing more precisely over the following weeks as its 30-day window fills in. If a night is missed — Watch not worn, or not charged — Axon shows a dash with the reason rather than carrying over a stale or fabricated number.</p>
+
+<h2>Other apps that do this</h2>
+<p>Axon isn't the only app turning Apple Watch data into a recovery score. <strong>Athlytic</strong> (4.8★, ~11K ratings) does the same core job and adds Target Exertion and Target Sleep coaching, running across iPhone, iPad, Apple Watch, Vision Pro and Mac; Pro is $4.99/month or $29.99/year. <strong>Bevel</strong> (4.8★, ~16K ratings) goes further into a full AI health coach with nutrition tracking and works even without an Apple Watch; Pro is $14.99/month or $99.99/year, plus optional credit packs from $4.99–$49.99. <strong>Livity</strong> (4.7★, ~1.2K ratings) keeps a free core tier and can also import data from Garmin, Fitbit or Oura if you're carrying history from another device; its PRO tier ranges from $3.99–$4.99/week up to $149.99 for a lifetime unlock. Axon's difference is scope and price: four scores, on-device, free, with no coaching layer or nutrition tracking bolted on.</p>
+
+<div class="cta"><h2>Recovery and Readiness from the Apple Watch you already wear</h2><p>Four daily scores, computed on your iPhone. Free. No strap, no subscription.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-apple-watch-recovery-score-without-whoop&mt=8">Get Axon on the App Store</a></div>
+
+<section class="faq" id="faq">
+<div class="faq-item"><p class="faq-q">Can I get a recovery score on Apple Watch without buying WHOOP or Oura?</p><p class="faq-a">Yes. Your Apple Watch already measures the signals a recovery score needs — heart rate variability, resting heart rate, sleep, respiratory rate, and on newer models blood oxygen and wrist temperature. A free app like Axon reads that data through Apple Health and computes a Recovery score on your iPhone, with no extra hardware.</p></div>
+<div class="faq-item"><p class="faq-q">Why doesn't Apple Watch show a recovery score by itself?</p><p class="faq-a">Apple's Vitals app shows your overnight readings against your own baselines and, from watchOS 27, a Recovery HRV reading — but it does not produce a recovery score on any model. Apple's new Readiness score (announced 9 September 2026) is limited to the Series 12 and Ultra 4. On a Series 4 through 11, SE or earlier Ultra, a recovery or readiness number comes from an app such as Axon.</p></div>
+<div class="faq-item"><p class="faq-q">How long until my recovery score is accurate?</p><p class="faq-a">Expect roughly a week of overnight Apple Watch wear before HRV- and resting-heart-rate-based scores move past a "building baseline" placeholder. Respiratory rate draws on a rolling 30-day window, so its contribution takes closer to a month to fully settle.</p></div>
+<div class="faq-item"><p class="faq-q">Do I need to wear my Apple Watch to sleep every night?</p><p class="faq-a">You need it overnight for Recovery and Readiness specifically — those scores are built from overnight HRV, resting heart rate and sleep data. Miss a night and Axon shows an honest gap rather than a guessed number; it never fabricates a reading.</p></div>
+<div class="faq-item"><p class="faq-q">Which Apple Watch models support a full recovery score?</p><p class="faq-a">Axon needs an iPhone on iOS 17 or later paired with an Apple Watch Series 4 or later, SE, or Ultra. Blood-oxygen readings need a Series 6 or later; wrist-temperature readings need a Series 8 or later. Without those specific sensors, the relevant row simply shows as unavailable rather than a fabricated value.</p></div>
+</section>
+
+<div class="related"><h2>Related guides</h2><ul>
+<li><a href="../best-whoop-alternatives/">Best WHOOP alternatives in 2026 (no strap, no subscription)</a></li>
+<li><a href="../readiness-score-explained/">Readiness score explained: what it measures and how to read it</a></li>
+<li><a href="../apple-watch-sleep-score-vs-recovery-score/">Apple Watch Sleep Score vs a recovery score</a></li>
+<li><a href="../athlytic-vs-axon/">Athlytic vs Axon</a></li>
+<li><a href="../bevel-vs-axon/">Bevel vs Axon</a></li>
+</ul></div>
+
+<div class="sources"><strong>Sources</strong><ol><li>Apple Newsroom, 9 September 2026 — Apple advances health and fitness capabilities (Readiness score on Series 12/Ultra 4; watchOS 27 Recovery HRV): <a href="https://www.apple.com/newsroom/2026/09/apple-advances-health-and-fitness-capabilities-using-apple-intelligence/">apple.com/newsroom</a></li>
+<li>Apple Support — Vitals on Apple Watch: <a href="https://support.apple.com/guide/watch/vitals-apd15aa7ed96/watchos" target="_blank">support.apple.com/guide/watch/vitals-apd15aa7ed96/watchos</a></li>
+<li>Apple Support — Track your sleep with Apple Watch: <a href="https://support.apple.com/guide/watch/track-your-sleep-apd830528336/watchos" target="_blank">support.apple.com/guide/watch/track-your-sleep-apd830528336/watchos</a></li>
+<li>Athlytic — App Store listing, checked September 2026: <a href="https://apps.apple.com/us/app/athlytic-fitness-recovery/id1543571755" target="_blank">apps.apple.com/us/app/athlytic-fitness-recovery/id1543571755</a></li>
+<li>Bevel — App Store listing, checked September 2026: <a href="https://apps.apple.com/us/app/bevel-ai-health-coach/id6456176249" target="_blank">apps.apple.com/us/app/bevel-ai-health-coach/id6456176249</a></li>
+<li>Livity — App Store listing, checked September 2026: <a href="https://apps.apple.com/us/app/livity-sleep-health-tracker/id6498938838" target="_blank">apps.apple.com/us/app/livity-sleep-health-tracker/id6498938838</a></li>
+<li>Axon — App Store listing: <a href="https://apps.apple.com/app/apple-store/id6765889625" target="_blank">apps.apple.com/app/apple-store/id6765889625</a></li>
+<li>Axon scoring methodology and baseline requirements — internal engineering documentation, ENGINEERING.md §4.1–4.4.</li>
+</ol></div>
+</main>
+<footer><span>© 2026 Axon</span><span><a href="../../">Support</a> · <a href="../">Guides</a> · <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">Privacy</a></span></footer>
+</body></html>

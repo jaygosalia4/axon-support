@@ -1,0 +1,147 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Readiness score explained: how it works</title>
+<meta name="description" content="A readiness score explained: what it measures, how Oura, WHOOP and Garmin compute theirs, how Axon builds Readiness from an Apple Watch, and how to read it.">
+<link rel="canonical" href="https://jaygosalia4.github.io/axon-support/guides/readiness-score-explained/">
+<meta property="og:type" content="article"><meta property="og:title" content="Readiness score explained: how it works"><meta property="og:description" content="A readiness score explained: what it measures, how Oura, WHOOP and Garmin compute theirs, how Axon builds Readiness from an Apple Watch, and how to read it."><meta property="og:url" content="https://jaygosalia4.github.io/axon-support/guides/readiness-score-explained/">
+<link rel="stylesheet" href="../../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "Readiness score explained",
+      "description": "A readiness score explained: what it measures, how Oura, WHOOP and Garmin compute theirs, how Axon builds Readiness from an Apple Watch, and how to read it.",
+      "datePublished": "2026-09-12",
+      "dateModified": "2026-09-12",
+      "author": { "@type": "Organization", "name": "Axon" },
+      "publisher": { "@type": "Organization", "name": "Axon" },
+      "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/guides/readiness-score-explained/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is a readiness score accurate?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A readiness score is a wellness estimate, not a lab diagnosis. It's built from real signals — heart rate variability, resting heart rate, sleep — compared against your own recent history, so it's only as good as its baseline. Every major model, including Oura, WHOOP, Garmin and Axon, needs your personal baseline to settle before the number is dependable; in the first week it's a rough guide, not a verdict. None of these scores diagnose illness or replace medical advice."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why is my readiness low after a good night's sleep?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Because sleep is only one input. In Axon's model, last night's Sleep score carries 40% of Readiness — the largest single share, but not the whole number. Recovery (HRV and resting heart rate against your baseline) and Activity Balance (how much load your body has been carrying) each carry 30%, and a hard training block, an elevated resting heart rate, or suppressed HRV can pull the composite down even after a great night's sleep. Readiness is also live during the day: it drains when your heart rate runs high, so a demanding morning can leave it lower than the number you woke up with."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need a WHOOP or Oura for a readiness score?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No, not if you already wear an Apple Watch Series 4 or later. Apple added its own native readiness score in watchOS 27, but it's exclusive to Apple Watch Series 12 and Ultra 4 — every earlier Watch, Series 4 through 11, SE and Ultra 1–3, doesn't get it. Axon reads the same category of HRV, resting-heart-rate and sleep data from any Series 4-and-later Watch and computes its own free Readiness score, with no extra strap or ring and no subscription."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How many days until it is reliable?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "About a week. Axon's HRV and resting-heart-rate comparisons need roughly seven nights of data before they're considered dependable enough to feed Recovery and Readiness in full; the respiratory-rate signal builds its own baseline over about 30 days. Treat your first week of numbers as provisional — the app is still learning what's normal for you."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<header><a class="logo" href="../../"><div class="logo-dot"></div>Axon</a><nav><a href="../">Guides</a><a href="../../#faq">FAQ</a><a href="../../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
+<main>
+<p class="eyebrow">Guides</p>
+<h1>Readiness score explained</h1>
+<p class="lede">A readiness score explained simply: it's one morning number that tells you whether to push today or hold back — built from last night's sleep, your overnight recovery signals, and how much load you've been carrying lately.</p>
+<p class="meta">By the Axon team · Updated 12 September 2026 · Prices are US App Store, September 2026</p>
+<div class="answer"><p><strong>Quick answer.</strong> A readiness score is a single number, usually 0–100, estimating how recovered your body is and whether today is a day to train hard or ease off. It's built from last night's sleep, overnight signals like heart rate variability (HRV) and resting heart rate, and your recent training load. Oura, WHOOP and Garmin each compute their own version from a dedicated ring, strap or watch; Apple added a native readiness feature in watchOS 27, but only on Apple Watch Series 12 and Ultra 4. Axon computes Readiness on-device from data any Apple Watch Series 4 and later already collects — free, with no extra hardware.</p></div>
+
+<h2>What a readiness score actually measures</h2>
+<p>A readiness score is a synthesis, not a raw reading. Your Apple Watch (or a WHOOP strap, or an Oura ring) collects dozens of signals overnight and through the day — HRV, resting heart rate, sleep stages, breathing rate, how hard you trained. A readiness score's job is to take that pile of numbers and answer one practical question: given everything your body did yesterday and last night, how much can you ask of it today? That's different from a sleep score, which only grades how you slept.</p>
+
+<h2>What feeds a readiness score, in general</h2>
+<p>Across the category, readiness scores are built from the same three ingredients, weighted differently by each company:</p>
+<ul>
+<li><strong>Last night's sleep</strong> — usually its own separate score, rather than raw hours.</li>
+<li><strong>Overnight recovery signals</strong> — chiefly HRV and resting heart rate, compared against your own recent history rather than a population average. A generic "normal" HRV means little; what matters is whether last night's reading was high or low for <em>you</em>.</li>
+<li><strong>Recent training load</strong> — how much physical strain you've carried over the last several days, so an easy night reads differently after a rest week than after a hard training block.</li>
+</ul>
+
+<h2>How Oura, WHOOP and Garmin define readiness</h2>
+<p>The three category leaders each name their score differently — Oura calls it Readiness, WHOOP calls it Recovery, Garmin calls it Training Readiness — but the underlying idea is the same: compare today's overnight signals against your own recent baseline.</p>
+
+<h3>Oura Readiness Score</h3>
+<p>Oura builds Readiness from named "Contributors," each comparing a recent signal to your longer-term average. Two of the core ones: <strong>Resting Heart Rate</strong> evaluates the lowest heart rate from the previous night against your long-term average; <strong>HRV Balance</strong> compares your recent HRV trend against your longer-term pattern to gauge stress and recovery. Other Contributors layer in body temperature, sleep, and how much you moved the day before.</p>
+
+<h3>WHOOP Recovery</h3>
+<p>WHOOP's Recovery score is a 0–100% daily number combining HRV, resting heart rate, sleep performance and respiratory rate. WHOOP states that HRV "carries most of the predictive value" in the score; sleep performance measures how your actual sleep duration compared with what WHOOP estimated you needed. WHOOP's 34–66% band is described as "maintaining and ready to take on moderate amounts of strain."</p>
+
+<h3>Garmin Training Readiness</h3>
+<p>Garmin's Training Readiness score is a 0–100 composite from six factors: last night's sleep score, recovery time, HRV status, acute training load, three-night sleep history, and three-day stress history. Garmin publishes five labelled bands, from Prime (95–100) down to Poor (1–24), and notes HRV status needs several weeks of consistent overnight wear before it can be trusted.</p>
+
+<h2>Apple's readiness score (Series 12 and Ultra 4 only)</h2>
+<p>Apple has now entered this category directly. Starting with watchOS 27 (from September 14, 2026), Apple Watch Series 12 and Apple Watch Ultra 4 ship with a native readiness feature: it analyzes recent activity, vitals and Sleep Score, then returns one score each day on a 0–10 scale, paired with a plain recommendation — Recover, Pace Yourself, Ready, or Go For It — updating through the day as new data arrives.</p>
+<p>The catch is hardware. It depends on a new Health Sensing System built only into Series 12 and Ultra 4 — sensors that measure heart rate every five seconds all day and HRV as often as every five minutes, roughly 24× more frequently than earlier Watches. Series 4 through 11, SE, and every Ultra before the 4 do not get it — those Watches keep Sleep Score and Vitals, but no on-device readiness number. That's the gap apps like Axon fill: Axon's Readiness works on any Apple Watch Series 4 and later, from the lower-frequency data those Watches already collect.</p>
+
+<h2>Readiness score explained: Axon's bio-recharge model</h2>
+<p>Axon computes Readiness on your iPhone from the same category of Apple Watch data described above — no upload required. Axon calls the model the <strong>bio-recharge arc</strong>, built from four weighted inputs:</p>
+<ul>
+<li><strong>Sleep score — 40%</strong> of the composite, from last night.</li>
+<li><strong>Recovery score — 30%</strong>, Axon's own HRV/resting-heart-rate/sleep-quality read.</li>
+<li><strong>Activity Balance — 30%</strong>, how much physical load you've been carrying relative to your recent fitness — a rest day after a heavy training block is treated differently from a rest day after a quiet week.</li>
+<li><strong>Mind score — 10%</strong>, only when you check in on how you're feeling that day; the other three components each scale down slightly so the total still adds to 100%.</li>
+</ul>
+<p>If Sleep can't be measured at all — you didn't wear the Watch overnight — Axon doesn't score it zero. Its 40% share is redistributed: Recovery and Activity Balance each rise to 50%, because an absent reading isn't the same as a bad one.</p>
+<p>What makes Axon's Readiness different from a single static number is that it doesn't sit still after it's calculated. Axon sets a <strong>morning anchor</strong> when you wake — a score built from Sleep, Recovery and Activity Balance — and then Readiness lives through the rest of the day as a live, uncapped body-battery:</p>
+<ul>
+<li>It <strong>drains</strong> when your heart rate runs above your personal relaxed band — the harder you push, the faster it falls. A stress response (elevated heart rate plus suppressed HRV) can drain it even without exercise.</li>
+<li>It <strong>recharges</strong> when your heart rate sits at or below that relaxed band, and <strong>naps add credit back</strong> the same way overnight sleep does.</li>
+<li>The <strong>ceiling is always the morning anchor</strong>: Readiness can fall to single digits over a hard day, but it can never rise above where you woke up.</li>
+</ul>
+<p>You can watch this update live in the free <a href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-readiness-score-explained&mt=8">Axon app for iPhone and Apple Watch</a>.</p>
+
+<h2>How to read your Readiness number, and why it moves</h2>
+<p>Axon's Readiness sits on a 0–100 scale, the same range as its other three scores. There's no fixed cutoff that applies to everyone — the number is personal, built from your own baselines — but the shape is consistent: the higher it is, the more your body has recovered and the more it can absorb today; the lower it is, the more clearly it's asking you to ease off. Because it's a live curve rather than a fixed daily grade, a morning anchor of 78 can fall to 40 through a demanding afternoon, or hold steady through a genuinely restful one — the useful habit is noticing when it drops sharply, not just checking the morning number once.</p>
+
+<h2>Why your first week is provisional</h2>
+<p>Every readiness model in this category — Oura, WHOOP, Garmin, Axon — needs to learn what's normal for <em>you</em> before its comparisons mean anything; there's no population average that tells the app whether last night's HRV was high or low for you. In Axon, HRV and resting heart rate need roughly seven nights of data before the comparison behind Recovery (and so Readiness) is dependable, and respiratory rate builds its own baseline over about 30 days. Treat week-one numbers as a starting estimate, not a verdict.</p>
+
+<div class="cta"><h2>Recovery and Readiness from the Apple Watch you already wear</h2><p>Four daily scores, computed on your iPhone. Free. No strap, no subscription.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-readiness-score-explained&mt=8">Get Axon on the App Store</a></div>
+
+<section class="faq" id="faq">
+<div class="faq-item"><p class="faq-q">Is a readiness score accurate?</p><p class="faq-a">A readiness score is a wellness estimate, not a lab diagnosis. It's built from real signals — heart rate variability, resting heart rate, sleep — compared against your own recent history, so it's only as good as its baseline. Every major model, including Oura, WHOOP, Garmin and Axon, needs your personal baseline to settle before the number is dependable; in the first week it's a rough guide, not a verdict. None of these scores diagnose illness or replace medical advice.</p></div>
+<div class="faq-item"><p class="faq-q">Why is my readiness low after a good night's sleep?</p><p class="faq-a">Because sleep is only one input. In Axon's model, last night's Sleep score carries 40% of Readiness — the largest single share, but not the whole number. Recovery (HRV and resting heart rate against your baseline) and Activity Balance (how much load your body has been carrying) each carry 30%, and a hard training block, an elevated resting heart rate, or suppressed HRV can pull the composite down even after a great night's sleep. Readiness is also live during the day: it drains when your heart rate runs high, so a demanding morning can leave it lower than the number you woke up with.</p></div>
+<div class="faq-item"><p class="faq-q">Do I need a WHOOP or Oura for a readiness score?</p><p class="faq-a">No, not if you already wear an Apple Watch Series 4 or later. Apple added its own native readiness score in watchOS 27, but it's exclusive to Apple Watch Series 12 and Ultra 4 — every earlier Watch, Series 4 through 11, SE and Ultra 1–3, doesn't get it. Axon reads the same category of HRV, resting-heart-rate and sleep data from any Series 4-and-later Watch and computes its own free Readiness score, with no extra strap or ring and no subscription.</p></div>
+<div class="faq-item"><p class="faq-q">How many days until it is reliable?</p><p class="faq-a">About a week. Axon's HRV and resting-heart-rate comparisons need roughly seven nights of data before they're considered dependable enough to feed Recovery and Readiness in full; the respiratory-rate signal builds its own baseline over about 30 days. Treat your first week of numbers as provisional — the app is still learning what's normal for you.</p></div>
+</section>
+
+<div class="related"><h2>Related guides</h2><ul>
+<li><a href="../best-whoop-alternatives/">Best WHOOP alternatives in 2026 (no strap, no subscription)</a></li>
+<li><a href="../apple-watch-recovery-score-without-whoop/">How to get a recovery score on Apple Watch — without WHOOP</a></li>
+<li><a href="../apple-watch-sleep-score-vs-recovery-score/">Apple Watch Sleep Score vs a recovery score — what Apple still doesn't tell you</a></li>
+<li><a href="../athlytic-vs-axon/">Athlytic vs Axon</a></li>
+<li><a href="../bevel-vs-axon/">Bevel vs Axon</a></li>
+</ul></div>
+
+<div class="sources"><strong>Sources</strong><ol>
+<li>Oura — <a href="https://support.ouraring.com/hc/en-us/articles/360057791533-Readiness-Contributors" target="_blank">Readiness Contributors</a></li>
+<li>Oura — <a href="https://support.ouraring.com/hc/en-us/articles/360025589793-Readiness-Score" target="_blank">Readiness Score</a></li>
+<li>WHOOP — <a href="https://www.whoop.com/us/en/thelocker/how-does-whoop-recovery-work-101/" target="_blank">How Does WHOOP Recovery Work?</a></li>
+<li>Garmin — <a href="https://www8.garmin.com/manuals/webhelp/GUID-E5C62F3F-DCE3-4197-8CA5-E419B2A55D12/EN-US/GUID-C21BE0C8-A08E-4DA1-B6C6-2E0E2DDDB372.html" target="_blank">Training Readiness, Owner's Manual</a></li>
+<li>Apple Newsroom — <a href="https://www.apple.com/newsroom/2026/09/apple-advances-health-and-fitness-capabilities-using-apple-intelligence/" target="_blank">Apple advances health and fitness capabilities using Apple Intelligence</a> (Sep 9, 2026)</li>
+</ol></div>
+</main>
+<footer><span>© 2026 Axon</span><span><a href="../../">Support</a> · <a href="../">Guides</a> · <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">Privacy</a></span></footer>
+</body></html>
