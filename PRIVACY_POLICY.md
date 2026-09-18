@@ -1,6 +1,6 @@
 # Privacy Policy — Axon
 
-*Last updated: July 10, 2026*
+*Last updated: September 18, 2026*
 
 ## Overview
 
@@ -18,12 +18,21 @@ Axon ("the app", "we", "us") is a health app for iPhone that reads Apple Health 
 
 **All scoring calculations run entirely on your device.** We do not write any data to Apple Health, and HealthKit data is never used for advertising.
 
-## 2. Always-on: account and anonymous usage analytics (no health values)
+## 2. Always-on: usage analytics (no health values), and the optional account
 
-When you sign in with Apple, the following non-health data is synced to our backend (Supabase, hosted on AWS) and to our product-analytics service (PostHog, US Cloud):
+**Axon works without an account.** From v1.9.1, nothing about the app's core function — reading Apple Health and computing your four scores on your phone — requires you to sign in. Sign in with Apple is optional and lives in Profile → Account; it adds an invite code you can share and a way to send feedback that can be answered. It does not back up, sync or restore your health history — your scores, logs and settings live only on this phone (Apple Health is untouched, and the last 120 days of scores rebuild from it on a fresh install).
 
-- **Account profile:** your Apple sign-in identifier, and your email/display name if you chose to share them with Sign in with Apple, plus the app version.
+**From every install, whether or not you sign in**, the following non-health data goes to our product-analytics service (PostHog, US Cloud):
+
 - **Usage events:** which screens you view, which controls you use, session length, and device context (app version, OS version, device model, timezone). These events carry **no health values** — a check-in event records that you answered, never what you answered. This is an enforced engineering rule, not a preference.
+- **Install-level events:** that the app was opened for the first time, whether you were shown the sign-in option and from where, whether you tapped Sign in with Apple and the outcome (signed in / cancelled / did not complete — never the reason text), and once a day whether the app is being used anonymously or signed in.
+
+While you are not signed in, these events are keyed by an anonymous identifier generated on your device by the analytics SDK — no account, no name, no email. The same non-health usage events are also written to our backend (Supabase, hosted on AWS) under a separate **random per-install identifier** generated on your device. That identifier is written only to records that carry no account and is never stored alongside your Apple identifier; those records carry no health values, no device context and no session identifier — only the event, the app version it came from, and that identifier. We use this to understand how many people who download the app reach their first score, and how many choose to sign in.
+
+**When you sign in with Apple**, the following is added:
+
+- **Account profile:** your Apple sign-in identifier, and your email/display name if you chose to share them with Sign in with Apple, plus the app version — synced to our backend.
+- **Usage events** from that point are keyed by your Apple sign-in identifier in both systems (PostHog links the anonymous events on this device to that identity, as its identity model does; nothing is re-keyed on our backend, and the anonymous per-install records stay anonymous).
 
 We use this to understand which features are used and to fix problems. PostHog is configured without session recording and without autocapture.
 
@@ -54,8 +63,8 @@ Deletion is executed by a dedicated server-side function; it is not reversible. 
 
 | Service | What it receives | What it never receives |
 |---|---|---|
-| **Supabase** (supabase.com, on AWS) | Account profile, usage events, feedback, opt-in contributions, opt-in diagnostics | Health values outside the two opt-ins; journal entries |
-| **PostHog** (posthog.com, US Cloud) | Anonymous usage events + device context, keyed by your Apple sign-in identifier | Any health value; your email or name; journal entries |
+| **Supabase** (supabase.com, on AWS) | Account profile, usage events (keyed by your Apple identifier when you are signed in, by the random per-install identifier when you are not), feedback, opt-in contributions, opt-in diagnostics | Health values outside the two opt-ins; journal entries; device context or a session identifier on the anonymous records |
+| **PostHog** (posthog.com, US Cloud) | Usage events + device context — keyed by an anonymous per-device identifier until you sign in, by your Apple sign-in identifier after | Any health value; your email or name; journal entries |
 
 We do not sell, trade, or rent your personal information. We do not use your data for advertising. No other third parties receive your data.
 
