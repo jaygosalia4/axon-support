@@ -1,6 +1,6 @@
 # Privacy Policy — Axon
 
-*Last updated: September 18, 2026*
+*Last updated: September 20, 2026*
 
 ## Overview
 
@@ -11,6 +11,7 @@ Axon ("the app", "we", "us") is a health app for iPhone that reads Apple Health 
 ## 1. On your device (never leaves your phone by default)
 
 - **Apple HealthKit data** we read: sleep analysis and stages, heart rate and heart rate variability (HRV), resting heart rate, respiratory rate, blood oxygen (SpO₂), wrist temperature, VO₂max, workouts, active energy, steps, walking metrics, time in daylight, and environmental sound levels.
+- **Dietary data from Apple Health** — calories, protein, carbohydrates, fat, fibre and caffeine — read **only if you ask us to**, from the Food tab. Axon does not request access to this data unless you tap that row, and it lets meals you log in another app (one that writes to Apple Health) appear in Axon without re-typing them. These values are read, shown on the Food tab, and nothing else: they are never uploaded, never included in the optional anonymized contribution below, and never sent to our analytics. **Axon writes nothing back to Apple Health**, so your entries in other apps are never changed.
 - **All four daily scores and every sub-score** — computed and stored on-device.
 - **Daily check-in answers** (mood, energy, stress, meditation minutes).
 - **Journal entries** (never uploaded, anywhere, under any setting).
