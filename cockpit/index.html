@@ -581,6 +581,18 @@
         <div class="grid stack">
           <div class="card">
             <div class="card-head">
+              <h3>Road to 1,000</h3>
+              <details class="how"><summary title="How this is counted">i</summary>
+                <div class="how-body">Lifetime first-time downloads from <code>asc_downloads_daily</code> (one owner per date, so a restated ASC day is never double-counted) against the founder’s 1,000 milestone (Sep 21 2026). Pace is the last 28 complete days. Weeks to go assumes that pace holds — it is a ruler, not a forecast.</div>
+              </details>
+            </div>
+            <div class="card-cap" id="acq-ms-def"></div>
+            <div id="acq-milestone"></div>
+          </div>
+        </div>
+        <div class="grid stack">
+          <div class="card">
+            <div class="card-head">
               <h3>Download → first launch, by week</h3>
               <details class="how"><summary title="How this is counted">i</summary>
                 <div class="how-body">Downloads that week (ASC) beside first launches that week (fleet). Not a per-person conversion: a redownload and an App Review device both launch without a first-time download, and a DNS-level blocker removes the launch but not the download. Read the shape, not the decimal.</div>
@@ -1530,6 +1542,23 @@ function downloadsOn(ascRows, days) {
   return ascRows.filter(r => isFirstTime(r) && set.has(r.date))
                 .reduce((a, r) => a + (Number(r.counts) || 0), 0);
 }
+/// The founder's milestone (Sep 21 2026): 1,000 lifetime first-time downloads.
+/// Lifetime = every first-time row in the warehouse (the feed reaches back to
+/// launch day, May 23 2026; the reader keeps one owner per date, so a restated
+/// ASC day is never counted twice). Pace = the last `paceDays` complete days,
+/// so a Reddit burst neither hides nor inflates the run-rate for long. Weeks
+/// to go is null at zero pace — a dash, never "∞ weeks".
+const DOWNLOAD_MILESTONE = 1000;
+function milestoneProgress(ascRows, today, paceDays = 28, target = DOWNLOAD_MILESTONE) {
+  if (!ascRows) return null;
+  const lifetime = ascRows.filter(isFirstTime).reduce((a, r) => a + (Number(r.counts) || 0), 0);
+  const recent = downloadsOn(ascRows, completeDays(today, paceDays)) || 0;
+  const perWeek = recent / (paceDays / 7);
+  const remaining = Math.max(0, target - lifetime);
+  const weeksToGo = perWeek > 0 ? remaining / perWeek : null;
+  return { lifetime, target, remaining, recent, paceDays, perWeek, weeksToGo,
+           pct: Math.min(100, (lifetime / target) * 100), reached: lifetime >= target };
+}
 /// First-time downloads per day, split by ASC source type.
 function downloadsByDaySource(ascRows, days) {
   if (!ascRows) return null;
@@ -1753,7 +1782,19 @@ const FEATURE_TILES = [
   { key: 'watch',   name: 'Watch paired',    def: 'watch_state paired:true. A row absent entirely means the phone could not know — never counted as false.', test: watchPaired },
   { key: 'wopen',   name: 'Opened the watch',def: 'watch_open — a heartbeat action, at most once per watch-day.', test: p => !!p.counts['watch_open'] },
   { key: 'notif',   name: 'Tapped a push',   def: 'notif_tap — the kind only, never which signal fired.', test: p => !!p.counts['notif_tap'] },
+  // 1.9.6 surfaces (Sep 20 2026). Both are STATE readings, once a day, so a
+  // person counts by their latest row — a reading that later flips to
+  // `unrequested` is not a stale "yes".
+  { key: 'openday', name: 'Saw an open day', def: 'open_day_shown — Home rendered yesterday-still-open after midnight (the day ends at sleep, 1.9.6+). Earlier builds cannot emit it, so read beside version adoption.', test: p => !!p.counts['open_day_shown'] },
+  { key: 'foodimp', name: 'Food from Health', def: 'food_import_state state:active — the Apple Health nutrition import is granted AND has data (1.9.6+). Latest reading per person; unrequested / empty do not count.', test: p => tokens(latestRow(p, 'food_import_state')?.data)['state'] === 'active' },
 ];
+/// The newest row of one event for a person, or null. Rows are appended in
+/// fetch order (newest first from the warehouse), so the first hit is latest.
+function latestRow(p, event) {
+  let best = null;
+  for (const r of p.rows || []) if (r.event === event && (!best || r.ts > best.ts)) best = r;
+  return best;
+}
 function featureReach(idx, today, windowDays) {
   const days = completeDays(today, windowDays);
   const activeIds = personsActiveIn(idx, days);
@@ -1784,15 +1825,28 @@ function syncDaily(idx, today, windowDays) {
     return { day: d, failed, trying, rate: rate(failed, trying, T.SYNC_FAIL_N_FLOOR) };
   });
 }
+/// Causes that are NOT a defect. `db_locked` is HealthKit refusing to open its
+/// store while the phone is locked (a background refresh, a Lock-Screen widget
+/// reload) — the next foreground sync succeeds. It is counted, printed, and
+/// kept OUT of the verdict, because a rule that acts on it would keep sending
+/// the founder after a bug that does not exist (Sep 21 2026 sweep).
+const SYNC_BENIGN_CAUSES = new Set(['db_locked']);
 function syncWindow(idx, days) {
   const set = new Set(days);
-  const failedP = new Set(), tryingP = new Set();
+  const failedP = new Set(), realP = new Set(), tryingP = new Set();
   for (const p of idx.list) for (const r of p.rows) {
     if (!set.has(r.day)) continue;
-    if (r.event === 'sync_failed') { failedP.add(p.id); tryingP.add(p.id); }
+    if (r.event === 'sync_failed') {
+      failedP.add(p.id); tryingP.add(p.id);
+      if (!SYNC_BENIGN_CAUSES.has(syncCause(r.data))) realP.add(p.id);
+    }
     else if (r.event === 'sync_completed') tryingP.add(p.id);
   }
-  return { failed: failedP.size, trying: tryingP.size, rate: rate(failedP.size, tryingP.size, T.SYNC_FAIL_N_FLOOR) };
+  // `failed` = any failure (what the tile prints); `real` = failures with a
+  // non-benign cause (what the verdict judges). A person with only db_locked
+  // rows is in `failed` and not in `real`.
+  return { failed: failedP.size, real: realP.size, benign: failedP.size - realP.size,
+           trying: tryingP.size, rate: rate(realP.size, tryingP.size, T.SYNC_FAIL_N_FLOOR) };
 }
 function syncCauses(idx, days) {
   const set = new Set(days);
@@ -2231,30 +2285,34 @@ const DECISION_RULES = [
     id: 'syncHealth',
     section: 'rel',
     title: 'Sync health',
-    rule: `Persons with any sync_failed ÷ persons with any sync outcome, over the window. `
+    rule: `Persons with a NON-BENIGN sync_failed ÷ persons with any sync outcome, over the window. `
         + `> ${T.SYNC_FAIL_ACT_PCT}% → act · > ${T.SYNC_FAIL_WATCH_PCT}% → watch. `
-        + `Needs n ≥ ${T.SYNC_FAIL_N_FLOOR} syncing installs. When it fires it names the top cause and `
-        + `the worst local-hour band, because those two decide what the fix is.`,
+        + `Needs n ≥ ${T.SYNC_FAIL_N_FLOOR} syncing installs. Benign = db_locked (HealthKit refusing a `
+        + `locked phone; the next foreground sync succeeds) — counted and printed, never judged. `
+        + `When it fires it names the top non-benign cause and the worst local-hour band, because `
+        + `those two decide what the fix is.`,
     evaluate(c) {
       const s = c.sync;
       if (!s) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
+      const real = s.real ?? s.failed;
+      const benign = s.benign ? ` (${s.benign} more only ever hit a locked phone — benign)` : '';
       if (s.trying < T.SYNC_FAIL_N_FLOOR) {
-        return { status: 'nodata', text: `${s.failed} of ${s.trying} syncing installs saw a failure — under ${T.SYNC_FAIL_N_FLOOR}, so no rate is printed.` };
+        return { status: 'nodata', text: `${real} of ${s.trying} syncing installs saw a real failure${benign} — under ${T.SYNC_FAIL_N_FLOOR}, so no rate is printed.` };
       }
-      const pct = (s.failed / s.trying) * 100;
-      const cause = c.causes && c.causes.length ? c.causes[0] : null;
+      const pct = (real / s.trying) * 100;
+      const cause = (c.causes || []).find(x => !SYNC_BENIGN_CAUSES.has(x.cause)) || null;
       const hr = c.topHour;
       const where = [
         cause ? `the top cause is ${cause.label} (${cause.users} of them)` : null,
         hr ? `the worst local hour is ${String(hr.hour).padStart(2, '0')}:00 with ${hr.failed} of ${hr.total} attempts failing` : null,
       ].filter(Boolean).join(', and ');
       if (pct > T.SYNC_FAIL_ACT_PCT) {
-        return { status: 'act', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a failure — ${where || 'no cause or hour could be attributed'}.` };
+        return { status: 'act', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure${benign} — ${where || 'no cause or hour could be attributed'}.` };
       }
       if (pct > T.SYNC_FAIL_WATCH_PCT) {
-        return { status: 'watch', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a failure; ${where || 'no cause could be attributed'}.` };
+        return { status: 'watch', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure${benign}; ${where || 'no cause could be attributed'}.` };
       }
-      return { status: 'fine', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a failure over the window.` };
+      return { status: 'fine', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure over the window${benign}.` };
     },
   },
   {
@@ -2597,6 +2655,7 @@ function buildContext(idx, today) {
     downloads: D.downloads ? downloadsOn(D.downloads, w30) : null,
     launches: idx ? installsIn(idx, w30).length : null,
   };
+  c.milestone = D.downloads ? milestoneProgress(D.downloads, today) : null;
   c.funnel   = idx ? installFunnel(installsIn(idx, w30)) : null;
   c.d1       = idx ? pooledRetention(idx, w30, 1) : null;
   c.d7       = idx ? pooledRetention(idx, w30, 7) : null;
@@ -2826,6 +2885,31 @@ function renderPulse(c, idx, verdicts) {
 }
 
 // ── 2. Acquisition ───────────────────────────────────────────────────────
+function milestoneSentence(m) {
+  if (m.reached) return `${m.lifetime.toLocaleString()} lifetime first-time downloads — the ${m.target.toLocaleString()} milestone is crossed.`;
+  const pace = m.perWeek >= 10 ? Math.round(m.perWeek) : Math.round(m.perWeek * 10) / 10;
+  const eta = m.weeksToGo === null ? 'no downloads in the pace window, so no ETA'
+    : m.weeksToGo > 52 ? `${Math.round(m.weeksToGo / 52 * 10) / 10} years at this pace`
+    : `${Math.round(m.weeksToGo)} weeks at this pace`;
+  return `${m.lifetime.toLocaleString()} of ${m.target.toLocaleString()} · ${m.remaining.toLocaleString()} to go · ${pace}/week over the last ${m.paceDays} days · ${eta}.`;
+}
+function renderMilestone(c) {
+  const m = c.milestone;
+  if (!m) {
+    el('acq-ms-def').textContent = '';
+    el('acq-milestone').innerHTML = unreadHtml('asc_downloads_daily');
+    return;
+  }
+  el('acq-ms-def').textContent = `Lifetime since launch · founder milestone ${m.target.toLocaleString()}.`;
+  el('acq-milestone').innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <span style="font-size:var(--t1);font-weight:700">${m.lifetime.toLocaleString()}</span>
+      <span style="color:var(--dim)">of ${m.target.toLocaleString()} · ${Math.round(m.pct)}%</span>
+    </div>
+    <div class="bar-track" style="margin:8px 0 10px"><div class="bar-fill" style="width:${m.pct}%;background:var(--purple)"></div></div>
+    <div class="chart-foot"><span class="n">${escHtml(milestoneSentence(m))}</span></div>`;
+}
+
 function renderAcquisition(c, idx) {
   if (!D.downloads) {
     el('acq-dl-def').textContent = '';
@@ -2850,6 +2934,8 @@ function renderAcquisition(c, idx) {
     el('acq-terr').innerHTML = barRows(terr.rows, 'var(--purple)', terr.total)
       + `<div class="chart-foot"><span class="n">n = ${terr.total} downloads across ${terr.territories} territories</span></div>`;
   }
+
+  renderMilestone(c);
 
   const wk = downloadLaunchByWeek(D.downloads, idx, c.today, 6);
   const anyKnown = wk.some(w => w.downloads !== null || w.launches !== null);
@@ -3694,6 +3780,48 @@ function runSelfTest() {
   const terr = downloadsByTerritory(asc, ['2026-09-14', '2026-09-15'], 10);
   eq('downloads: territories are ranked by first-time downloads only', terr.rows[0].count, 40);
 
+  // Road to 1,000 (founder milestone, Sep 21 2026)
+  {
+    const m = milestoneProgress(asc, TODAY);
+    eq('milestone: lifetime = every first-time row, redownloads excluded', m.lifetime, 60);
+    eq('milestone: the target is the founder’s 1,000', m.target, 1000);
+    eq('milestone: remaining = target − lifetime', m.remaining, 940);
+    eq('milestone: pace reads the last 28 complete days only (all three rows are inside it)', m.recent, 60);
+    eq('milestone: pace is expressed per week', m.perWeek, 15);
+    ok('milestone: weeks to go = remaining ÷ pace', Math.abs(m.weeksToGo - 940 / 15) < 1e-9);
+    ok('milestone: not reached', !m.reached && m.pct === 6);
+    ok('milestone: the sentence carries lifetime, target, remaining, pace and the ETA — in years past 52 weeks',
+       /60 of 1,000 · 940 to go · 15\/week over the last 28 days · 1\.2 years at this pace/.test(milestoneSentence(m)));
+    ok('milestone: under a year the ETA prints in weeks',
+       /· 16 weeks at this pace/.test(milestoneSentence(milestoneProgress(
+         [{ date: '2026-06-01', download_type: 'First-time download', counts: 800 },
+          { date: '2026-09-15', download_type: 'First-time download', counts: 40 }], TODAY))));
+    eq('milestone: unread ASC table → null, never a zero', milestoneProgress(null, TODAY), null);
+    const stale = milestoneProgress([{ date: '2026-01-01', download_type: 'First-time download', counts: 50 }], TODAY);
+    eq('milestone: zero pace yields a null ETA, never a division by zero', stale.weeksToGo, null);
+    ok('milestone: and the sentence says so instead of printing ∞', /no downloads in the pace window/.test(milestoneSentence(stale)));
+    const done = milestoneProgress([{ date: '2026-09-01', download_type: 'First-time download', counts: 1000 }], TODAY);
+    ok('milestone: at the target the sentence declares it crossed and pct caps at 100', done.reached && done.pct === 100 && /is crossed/.test(milestoneSentence(done)));
+  }
+
+  // 1.9.6 surfaces on the feature-reach board
+  {
+    const fIdx = buildIndex([
+      fe('a', '2026-09-18', 'open_day_shown'),
+      fe('a', '2026-09-17', 'food_import_state', 'state:active|src:one', { ts: '2026-09-17T06:00:00Z' }),
+      fe('a', '2026-09-18', 'food_import_state', 'state:unrequested|src:none', { ts: '2026-09-18T06:00:00Z' }),
+      fe('b', '2026-09-18', 'food_import_state', 'state:active|src:many'),
+      fe('c', '2026-09-18', 'food_import_state', 'state:empty|src:none'),
+      fe('d', '2026-09-18', 'tab_viewed', 'body'),
+    ], [], TODAY);
+    const fr = featureReach(fIdx, TODAY, 7);
+    const tile = k => fr.tiles.find(t => t.key === k).rate.pct;
+    eq('reach: open_day_shown counts the person who saw an open day (1 of 4 active)', tile('openday'), 25);
+    eq('reach: food import counts only the LATEST reading being active (a flipped-off import is not a yes)', tile('foodimp'), 25);
+    ok('reach: both tiles declare the version floor in their definition',
+       FEATURE_TILES.filter(t => t.key === 'openday' || t.key === 'foodimp').every(t => /1\.9\.6/.test(t.def)));
+  }
+
   // ── J. PostHog vs first-party ───────────────────────────────────────────
   const fl = (iid, day, b) => ({ id: 'l' + iid + day, message: 'funnel:app_first_launch',
                                  created_at: day + 'T06:00:00Z', payload: { iid, b: b || '330' } });
@@ -3865,12 +3993,37 @@ function runSelfTest() {
      verdict('syncHealth', { sync: { failed: T.SYNC_FAIL_WATCH_PCT + 1, trying: 100 }, causes: [], topHour: null }), 'watch');
   eq('rule sync: below the n floor → no verdict',
      verdict('syncHealth', { sync: { failed: 9, trying: T.SYNC_FAIL_N_FLOOR - 1 }, causes: [], topHour: null }), 'nodata');
-  ok('rule sync: when it fires it names the top cause AND the worst local hour',
-     /db_locked/.test(rule('syncHealth').evaluate({
-       sync: { failed: 40, trying: 100 },
-       causes: [{ label: 'phone locked (db_locked)', users: 12 }],
+  ok('rule sync: when it fires it names the top NON-BENIGN cause AND the worst local hour',
+     /HealthKit query \(query\)/.test(rule('syncHealth').evaluate({
+       sync: { failed: 40, real: 40, benign: 0, trying: 100 },
+       causes: [{ cause: 'db_locked', label: 'phone locked (db_locked)', users: 50 },
+                { cause: 'query', label: 'HealthKit query (query)', users: 12 }],
        topHour: { hour: 1, failed: 30, total: 33 },
      }).text));
+  // db_locked is benign (Sep 21 2026): a locked phone refusing HealthKit is not a defect.
+  eq('rule sync: a fleet whose only failures are db_locked reads FINE',
+     verdict('syncHealth', { sync: { failed: 60, real: 0, benign: 60, trying: 100 }, causes: [{ cause: 'db_locked', label: 'phone locked (db_locked)', users: 60 }], topHour: null }), 'fine');
+  ok('rule sync: and it still PRINTS the benign count rather than hiding it',
+     /60 more only ever hit a locked phone/.test(rule('syncHealth').evaluate({
+       sync: { failed: 60, real: 0, benign: 60, trying: 100 }, causes: [], topHour: null }).text));
+  eq('rule sync: a context without the real split (old fixtures) falls back to the pooled count',
+     verdict('syncHealth', { sync: { failed: 40, trying: 100 }, causes: [], topHour: null }), 'act');
+  {
+    const bIdx = buildIndex([
+      fe('lockedOnly', '2026-09-18', 'sync_failed', 'error:db_locked'),
+      fe('lockedOnly', '2026-09-18', 'sync_completed', 'ok'),
+      fe('realFail',   '2026-09-18', 'sync_failed', 'error:query'),
+      fe('mixed',      '2026-09-18', 'sync_failed', 'error:db_locked'),
+      fe('mixed',      '2026-09-18', 'sync_failed', 'error'),
+      fe('fine',       '2026-09-18', 'sync_completed', 'ok'),
+    ], [], TODAY);
+    const w = syncWindow(bIdx, ['2026-09-18']);
+    eq('syncWindow: pooled failed counts every failing person', w.failed, 3);
+    eq('syncWindow: real excludes the person who only ever hit db_locked', w.real, 2);
+    eq('syncWindow: a bare pre-1.9.5 `error` is NOT benign (cause not recorded ≠ locked)', w.real >= 2, true);
+    eq('syncWindow: benign = failed − real', w.benign, 1);
+    eq('syncWindow: trying counts everyone with any outcome', w.trying, 4);
+  }
   ok('rule sync: and it prints the hour as a clock time',
      /01:00/.test(rule('syncHealth').evaluate({
        sync: { failed: 40, trying: 100 },
