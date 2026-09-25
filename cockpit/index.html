@@ -1359,6 +1359,8 @@ const FEATURE_ITEMS = [
   { key: 'food',      label: 'Logged food',       def: 'food_logged.', test: r => r.event === 'food_logged' },
   { key: 'fitage',    label: 'Opened Fit Age',    def: 'fitness_age_viewed.', test: r => r.event === 'fitness_age_viewed' },
   { key: 'share',     label: 'Opened a share',    def: 'share_opened — only when a card actually rendered.', test: r => r.event === 'share_opened' },
+  // 1.9.8: the day-3 Share Axon sheet (share_app promo route). Counts the sheet OPENING, never a send — iOS never says.
+  { key: 'applink',   label: 'Shared the app link', def: 'share_opened card:app_link — the day-3 Share Axon sheet opened (1.9.8+). Installs from it land in App Store Connect under ct=share-day3.', test: r => r.event === 'share_opened' && r.data === 'card:app_link' },
   { key: 'widget',    label: 'Has a widget',      def: 'widget_state with n > 0 — a daily device reading, not a tap.', test: r => r.event === 'widget_state' && (tokenInt(r.data, 'n') || 0) > 0 },
   { key: 'watch',     label: 'Opened the Watch app', def: 'watch_open — at most once per watch-day.', test: r => r.event === 'watch_open' },
   { key: 'notif',     label: 'Tapped a notification', def: 'notif_tap — the kind only.', test: r => r.event === 'notif_tap' },
@@ -3543,6 +3545,7 @@ function runSelfTest() {
     const fu = usageByWeek(ix, ['2026-09-07'], FEATURE_ITEMS);
     eq('features: a widget reading of n:0 is not a widget', fu.items.find(x => x.key === 'widget').weeks[0].num, 1);
     eq('features: check_in counts people', fu.items.find(x => x.key === 'check_in').weeks[0].num, 1);
+    ok('features: the app-link share is its own item and counts only card:app_link', (() => { const i = FEATURE_ITEMS.find(x => x.key === 'applink'); return !!i && i.test({ event: 'share_opened', data: 'card:app_link' }) && !i.test({ event: 'share_opened', data: 'card:fitness_age' }) && /1\.9\.8/.test(i.def); })());
     const nt = notifTaps(ix, completeDays(TODAY, 7));
     eq('notifs: kinds read from t: and from the older bare token', nt.map(x => [x.kind, x.taps, x.persons]), [['recap', 2, 1], ['bedtime', 1, 1]]);
     const cp = campaigns(ix, completeDays(TODAY, 7));
