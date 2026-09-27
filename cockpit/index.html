@@ -1356,7 +1356,11 @@ function screenItems(idx) {
 }
 const FEATURE_ITEMS = [
   { key: 'check_in',  label: 'Checked in',        def: 'check_in — from Home or Mind.', test: r => r.event === 'check_in' },
-  { key: 'food',      label: 'Logged food',       def: 'food_logged.', test: r => r.event === 'food_logged' },
+  // Sep 26 2026: was `food_logged`, an event the app has never emitted — the item counted
+  // nothing. The app's event is `food_entry_added` (one row per logged entry).
+  { key: 'food',      label: 'Logged food',       def: 'food_entry_added — one or more food entries logged in the app.', test: r => r.event === 'food_entry_added' },
+  // 1.9.8: the energy-history page (net over 7/30/90 days). src:food = the Food tab's summary door.
+  { key: 'ledger',    label: 'Opened energy history', def: 'energy_ledger_viewed — the net-energy history page opened (1.9.8+); src:food is the Food tab door, src:target the target page.', test: r => r.event === 'energy_ledger_viewed' },
   { key: 'fitage',    label: 'Opened Fit Age',    def: 'fitness_age_viewed.', test: r => r.event === 'fitness_age_viewed' },
   { key: 'share',     label: 'Opened a share',    def: 'share_opened — only when a card actually rendered.', test: r => r.event === 'share_opened' },
   // 1.9.8: the day-3 Share Axon sheet (share_app promo route). Counts the sheet OPENING, never a send — iOS never says.
@@ -3215,7 +3219,7 @@ function buildDemo(opts) {
       if (rnd() < 0.35) push(p, day, hour, 'tab_viewed', pick(['mind', 'fit_age']));
       push(p, day, hour, 'app_close', 's:' + (8 + Math.floor(rnd() * 240)));
       if (rnd() < 0.3) push(p, day, hour, 'check_in', 'mood|src:home');
-      if (rnd() < 0.08) push(p, day, hour, 'food_logged', 'src:quick');
+      if (rnd() < 0.08) push(p, day, hour, 'food_entry_added', 'meal:Lunch|src:shelf');
       if (rnd() < 0.15) push(p, day, hour, 'fitness_age_viewed', 'age');
       if (rnd() < 0.05) push(p, day, hour, 'share_opened', 'card:fitness_age');
       if (rnd() < 0.07) push(p, day, hour, 'notif_tap', 't:' + pick(['bedtime', 'recap', 'recap', 'warning', 'mind']));
@@ -3545,6 +3549,8 @@ function runSelfTest() {
     const fu = usageByWeek(ix, ['2026-09-07'], FEATURE_ITEMS);
     eq('features: a widget reading of n:0 is not a widget', fu.items.find(x => x.key === 'widget').weeks[0].num, 1);
     eq('features: check_in counts people', fu.items.find(x => x.key === 'check_in').weeks[0].num, 1);
+    ok('features: Logged food counts the event the app actually emits', (() => { const i = FEATURE_ITEMS.find(x => x.key === 'food'); return !!i && i.test({ event: 'food_entry_added', data: 'meal:Lunch|src:shelf' }) && !i.test({ event: 'food_logged', data: '' }); })());
+    ok('features: energy history is its own item, any door, 1.9.8 floor stated', (() => { const i = FEATURE_ITEMS.find(x => x.key === 'ledger'); return !!i && i.test({ event: 'energy_ledger_viewed', data: 'src:food|period:month|state:net' }) && i.test({ event: 'energy_ledger_viewed', data: 'src:target|period:week|state:none' }) && !i.test({ event: 'trend_range', data: '30' }) && /1\.9\.8/.test(i.def); })());
     ok('features: the app-link share is its own item and counts only card:app_link', (() => { const i = FEATURE_ITEMS.find(x => x.key === 'applink'); return !!i && i.test({ event: 'share_opened', data: 'card:app_link' }) && !i.test({ event: 'share_opened', data: 'card:fitness_age' }) && /1\.9\.8/.test(i.def); })());
     const nt = notifTaps(ix, completeDays(TODAY, 7));
     eq('notifs: kinds read from t: and from the older bare token', nt.map(x => [x.kind, x.taps, x.persons]), [['recap', 2, 1], ['bedtime', 1, 1]]);
