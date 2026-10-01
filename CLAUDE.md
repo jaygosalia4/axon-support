@@ -1,6 +1,6 @@
 # CLAUDE.md — Axon Support Site
 
-**What it is:** the public support page for **Axon**, the iOS health-scores app (app repo: `github.com/jaygosalia4/Axon-Vital-Score`, private — local at `/Users/apple/Projects/axon`; this site lives inside it at `/Users/apple/Projects/axon/0.code/axon-support` as its own repo, ignored by the app repo, since Oct 1 2026). One static file, `index.html` (dark theme: four-score explainer, FAQ, contact `support@axon-app.com`). No build step, no dependencies.
+**What it is:** the public support page for **Axon**, the iOS health-scores app (app repo: `github.com/jaygosalia4/Axon-Vital-Score`, private — local at `/Users/apple/Projects/axon`; this site lives inside it at `/Users/apple/Projects/axon/0-code/axon-support` as its own repo, ignored by the app repo, since Oct 1 2026). One static file, `index.html` (dark theme: four-score explainer, FAQ, contact `support@axon-app.com`). No build step, no dependencies.
 
 **Where deployed:** GitHub Pages — **https://jaygosalia4.github.io/axon-support/** (this repo, source = `main` branch root, HTTPS enforced). App Store Connect's **Support URL** points here — keep it alive.
 
