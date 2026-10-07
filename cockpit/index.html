@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Axon Dashboard</title>
   <!--
-    THE ONE DASHBOARD (Sep 25 2026). Spec: docs/superpowers/specs/2026-09-25-one-dashboard.md
+    THE ONE DASHBOARD (Sep 25 2026). Spec: 1-product/specs/2026-09-25-one-dashboard.md
 
     One page replaces three (the decision page, the per-user cockpit, the
     PostHog board). One file, no build step, no external script: every chart
@@ -42,10 +42,6 @@
       --watch:     #ffb224;
       --fine:      #3ed47f;
       --none:      #8e97ae;
-      --act-bg:    rgba(255,111,78,.16);
-      --watch-bg:  rgba(255,178,36,.15);
-      --fine-bg:   rgba(62,212,127,.13);
-      --none-bg:   rgba(142,151,174,.14);
 
       /* Series — graphics contrast ≥3:1 on --surface. */
       --accent:    #00d4ff;
@@ -78,10 +74,6 @@
       --watch:     #9a5d00;
       --fine:      #147a42;
       --none:      #5f6679;
-      --act-bg:    rgba(199,54,26,.10);
-      --watch-bg:  rgba(154,93,0,.11);
-      --fine-bg:   rgba(20,122,66,.10);
-      --none-bg:   rgba(95,102,121,.10);
       --accent:    #0077a8;
       --s1c:       #0077a8;
       --s2c:       #8a2fc4;
@@ -242,35 +234,14 @@
     .k-val.small { font-size: var(--t2); }
     .k-n { font-size: var(--t5); color: var(--dim); margin-top: 3px; }
 
-    /* ── Status chips ───────────────────────────────────────────────────── */
-    .chip { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
-            padding: 3px 8px; border-radius: 999px; white-space: nowrap; }
-    .chip-act { background: var(--act-bg); color: var(--act); }
-    .chip-watch { background: var(--watch-bg); color: var(--watch); }
-    .chip-fine { background: var(--fine-bg); color: var(--fine); }
-    .chip-nodata { background: var(--none-bg); color: var(--none); }
-
-    /* ── Today ──────────────────────────────────────────────────────────── */
-    .today { background: var(--surface); border-radius: 16px; padding: 14px 18px 10px; border: 1px solid var(--hairline); }
-    .today.takeover { box-shadow: inset 3px 0 0 var(--act); }
-    .today-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
-    .today-head h2 { font-size: var(--t3); }
+    /* ── Status line (D-37: facts only, nothing judged) ─────────────────── */
+    .status-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: var(--t5); }
     .fpills { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
     .fpill { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t5); color: var(--muted);
              border: 1px solid var(--rule); border-radius: 999px; padding: 2px 9px; cursor: help; }
     .fpill i { width: 7px; height: 7px; border-radius: 50%; background: var(--none); display: inline-block; }
     .fpill.ok i { background: var(--fine); }
-    .fpill.warn i { background: var(--watch); }
     .fpill.bad i { background: var(--act); }
-    .v-row { display: grid; grid-template-columns: 66px minmax(0, 1fr) auto; gap: 12px; align-items: baseline;
-             padding: 8px 0; border-top: 1px solid var(--hairline); }
-    .v-row:first-child { border-top: none; }
-    .v-text { font-size: var(--t3); }
-    .today.takeover .v-text { color: var(--act); }
-    .v-where { font-size: var(--t5); color: var(--dim); text-decoration: none; white-space: nowrap; }
-    .v-where:hover { color: var(--text); }
-    .quiet { font-size: var(--t3); color: var(--muted); padding: 2px 0 6px; }
-    main.dimmed section:not(#s-today) { opacity: .62; }
 
     /* ── Bars ───────────────────────────────────────────────────────────── */
     .bars { display: flex; flex-direction: column; gap: 9px; }
@@ -375,9 +346,6 @@
       main { padding: var(--sp2) 16px 72px; }
       .tile { padding: 12px 12px 14px; border-radius: 12px; }
       .tile-note { display: none; }
-      .v-row { grid-template-columns: 62px minmax(0, 1fr); }
-      .v-where { grid-column: 2; }
-      .v-text { font-size: var(--t4); }
       .k-val { font-size: 22px; }
       .fpills { margin-left: 0; }
       .chart-xlab.odd { visibility: hidden; }
@@ -431,7 +399,7 @@
     <span id="filter-summary"></span>
   </div>
   <nav class="secnav" aria-label="Sections">
-    <a href="#s-today">Today</a><a href="#s-users">Users</a><a href="#s-new">New users</a>
+    <a href="#s-users">Users</a><a href="#s-new">New users</a>
     <a href="#s-ret">Retention</a><a href="#s-use">What they use</a><a href="#s-fb">Feedback</a>
     <a href="#s-err">Errors</a><a href="#s-trust">Numbers you can trust</a>
   </nav>
@@ -451,7 +419,7 @@
 </div>
 
 <main style="display:none">
-  <section id="s-today" style="padding-top:0"></section>
+  <section id="s-status" style="padding-top:0"></section>
   <div id="top-notes" style="margin-top:12px"></div>
 
   <section id="s-users">
@@ -491,7 +459,7 @@
 </main>
 
 <footer id="page-footer" style="display:none">
-  <span>Spec: <code>docs/superpowers/specs/2026-09-25-one-dashboard.md</code></span>
+  <span>Spec: <code>1-product/specs/2026-09-25-one-dashboard.md</code></span>
   <span><code>?demo</code> · <code>?demo&amp;stale</code> · <code>?demo&amp;empty</code> · <code>?selftest</code> · <code>?theme=light</code></span>
 </footer>
 
@@ -500,16 +468,19 @@
 /* =========================================================================
    AXON — THE ONE DASHBOARD
    =========================================================================
-     PART 1  config, thresholds, auth, fetch
+     PART 1  config, n floors, auth, fetch
      PART 2  pure reducers — no DOM, no network, no clock
-     PART 3  DECISION_RULES — one registry, named thresholds
-     PART 4  render: chart primitives, the tile registry, the interaction law
-     PART 5  ?demo fixtures
-     PART 6  ?selftest
+     PART 3  render: chart primitives, the tile registry, the interaction law
+     PART 4  ?demo fixtures
+     PART 5  ?selftest
 
    The rule that shapes all of it: **no reducer reads the clock.** Every one
    takes `today` (an IST day string) or an explicit list of days, so a cohort
    edge, a DST hour and a filter are all reproducible in a test.
+
+   ⛔ D-37 (Jay, Oct 7 2026): historical metrics only. No targets, kill bars,
+   thresholds, projections, verdicts or pace lines — the page says what
+   happened, nothing else. `?selftest` enforces it.
    ========================================================================= */
 
 // ── Supabase ──────────────────────────────────────────────────────────────
@@ -519,62 +490,28 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const IST_OFFSET_MIN = 330;
 const REFRESH_MINS   = 10;
 
-/* ── ⚙️ FOUNDER-TUNABLE CONSTANTS ──────────────────────────────────────────
-   Every threshold any decision rule reads is here, named, in one block. No
-   rule carries a literal. `?selftest` exercises each rule just below, at and
-   just above its own threshold, and below its n floor. */
+/* ── ⚙️ N FLOORS — the only constants that shape a number ──────────────────
+   D-37: no targets or thresholds live here, only n floors. Under a floor a
+   rate prints as a FRACTION plus the word "directional", never a bare
+   percentage. `?selftest` checks every key is an n floor. */
 const T = {
-  // Under this many in the denominator a rate prints as a FRACTION plus the
-  // word "directional" — never a bare percentage.
-  RATE_N_FLOOR:          20,
-
-  D1_ACT_PCT:            30,
-  D1_WATCH_PCT:          40,
-  D1_N_FLOOR:            20,
-
-  D7_ACT_PCT:            12,
-  D7_WATCH_PCT:          20,
-  D7_N_FLOOR:            20,
-
-  ACTIVATION_ACT_PCT:    70,
-  ACTIVATION_WATCH_PCT:  85,
-  ACTIVATION_N_FLOOR:    20,
-
-  // Download → first launch. Two populations joined by week: never "act".
-  DL_LAUNCH_WATCH_PCT:   50,
-  DL_LAUNCH_N_FLOOR:     20,
-
-  SYNC_FAIL_ACT_PCT:     15,
-  SYNC_FAIL_WATCH_PCT:    8,
-  SYNC_FAIL_N_FLOOR:     20,
-
-  // Hours since the last OK run. Only CRITICAL feeders can take over Today —
-  // a stale rating snapshot makes one tile old, not the whole page.
-  FEEDER_STALE_H:        { posthog: 3, asc: 36, store: 36 },
-
-  DRIFT_ACT_PCT:         25,
-  DRIFT_N_FLOOR:         10,
-
-  STICKINESS_WATCH_PCT:  20,
-  STICKINESS_N_FLOOR:    20,
+  RATE_N_FLOOR:   20,
+  // PostHog vs first-party: under this many on the larger side the gap
+  // prints as a count, not a percentage.
+  DRIFT_N_FLOOR:  10,
 };
 
 // The version with the midnight sync fix (drives the before/after read).
 const MIDNIGHT_FIX_VERSION = '1.9.5';
 // The version live on the App Store — a constant, never max(versions seen),
 // so one TestFlight phone cannot re-label the fleet. Move it at every release.
-const SHIPPED_VERSION = '1.9.8';
+const SHIPPED_VERSION = '1.9.9';
 
 // ── Fetch caps ────────────────────────────────────────────────────────────
 const FLEET_PAGE      = 1000;
 const FLEET_MAX_PAGES = 100;          // 100,000 rows
 const LOG_PAGE        = 1000;
 const LOG_MAX_PAGES   = 20;           // 20,000 anonymous funnel rows
-
-// Fixed windows the DECISION RULES read. Filters never move a verdict: a
-// verdict is about the whole fleet, so it cannot depend on what is selected.
-const RULE_WINDOW_DAYS = 30;
-const RULE_REL_DAYS    = 14;
 
 // ── Auth (pattern from the control panel — do not regress) ────────────────
 // Tokens live in memory only. Persisting them would widen who holds access.
@@ -1148,7 +1085,7 @@ function activesSeries(idx, days) {
 }
 /// DAU ÷ MAU per day, under the n rule.
 function stickinessSeries(series) {
-  return series.map(s => ({ day: s.day, dau: s.dau, mau: s.mau, rate: rate(s.dau, s.mau, T.STICKINESS_N_FLOOR) }));
+  return series.map(s => ({ day: s.day, dau: s.dau, mau: s.mau, rate: rate(s.dau, s.mau) }));
 }
 /// Actives per day by the app version they ran THAT day (their newest row
 /// that day). The top five versions keep their own band; the rest pool.
@@ -1280,8 +1217,8 @@ function funnelByWeek(ascRows, idx, mondays, lastDay) {
     };
   });
 }
-/// The install funnel over one cohort — steps cumulative-AND (the activation
-/// rule reads it).
+/// The install funnel over one cohort — steps cumulative-AND (the New users
+/// section's first-launch-to-day-2 tile).
 function installFunnel(cohort) {
   const steps = [
     { key: 'launch',  label: 'First launch',        test: () => true },
@@ -1292,7 +1229,7 @@ function installFunnel(cohort) {
     { key: 'day2',    label: 'Came back day 2',     test: returnedD2 },
   ];
   let live = cohort;
-  return steps.map(s => { live = live.filter(s.test); return { ...s, n: live.length, of: cohort.length, rate: rate(live.length, cohort.length) }; });
+  return steps.map(s => { live = live.filter(s.test); return { ...s, n: live.length, of: cohort.length, rate: rate(live.length, cohort.length), people: live }; });
 }
 function worstFunnelDrop(steps) {
   let worst = { from: steps[0].label, to: steps[1] ? steps[1].label : steps[0].label, lost: 0 };
@@ -1332,19 +1269,14 @@ function installTriangle(idx, mondays, lastDay, cols) {
 function activityTriangle(idx, mondays, lastDay, cols) {
   return weeklyTriangle(idx, mondays, lastDay, cols, w => { const wd = weekDays(w); return idx.list.filter(p => wd.some(d => p.activeDays.has(d))); });
 }
-/// Pooled D-N over a window — the rules read it.
+/// Pooled D-N over a window: installs whose day N fell in it, and who of them
+/// was active on exactly day N (the Retention section's day-1 / day-7 tile).
 function pooledRetention(idx, days, n) {
-  if (!days.length) return { num: 0, den: 0, rate: rate(0, 0) };
+  if (!days.length) return { num: 0, den: 0, rate: rate(0, 0), back: [] };
   const last = days[days.length - 1];
   const cohort = idx.cohorted.filter(p => { const t = shiftDay(p.firstLaunchDay, n); return t >= days[0] && t <= last; });
-  const num = cohort.filter(p => p.activeDays.has(shiftDay(p.firstLaunchDay, n))).length;
-  return { num, den: cohort.length, rate: rate(num, cohort.length, n === 1 ? T.D1_N_FLOOR : T.D7_N_FLOOR) };
-}
-function stickiness(idx, today) {
-  const d = lastCompleteDay(today);
-  const dau = (daySets(idx).get(d) || new Set()).size;
-  const mau = personsActiveIn(idx, completeDays(today, 30)).size;
-  return { dau, mau, rate: rate(dau, mau, T.STICKINESS_N_FLOOR) };
+  const back = cohort.filter(p => p.activeDays.has(shiftDay(p.firstLaunchDay, n)));
+  return { num: back.length, den: cohort.length, rate: rate(back.length, cohort.length), back };
 }
 
 // ══ 4. WHAT THEY USE ══════════════════════════════════════════════════════
@@ -1581,7 +1513,7 @@ function syncWindow(idx, days) {
     } else if (r.event === 'sync_completed') tryingP.add(p.id);
   }
   return { failed: failedP.size, real: realP.size, benign: failedP.size - realP.size,
-           trying: tryingP.size, rate: rate(realP.size, tryingP.size, T.SYNC_FAIL_N_FLOOR) };
+           trying: tryingP.size, rate: rate(realP.size, tryingP.size) };
 }
 function syncCauses(idx, days) {
   const set = new Set(days);
@@ -1613,21 +1545,13 @@ function syncLocalHours(idx, days, versionFilter) {
     hours[h].total++;
     if (r.event === 'sync_failed') hours[h].failed++;
   }
-  return { hours: hours.map(x => ({ ...x, rate: rate(x.failed, x.total, T.SYNC_FAIL_N_FLOOR) })), dropped, kept };
+  return { hours: hours.map(x => ({ ...x, rate: rate(x.failed, x.total) })), dropped, kept };
 }
 function nightBand(hoursResult) {
   const band = hoursResult.hours.slice(0, 6);
   const failed = band.reduce((a, x) => a + x.failed, 0);
   const total = band.reduce((a, x) => a + x.total, 0);
-  return { failed, total, rate: rate(failed, total, T.SYNC_FAIL_N_FLOOR) };
-}
-function topHour(hoursResult) {
-  let best = null;
-  for (const h of hoursResult.hours) {
-    if (h.total < 3) continue;
-    if (!best || h.failed > best.failed) best = h;
-  }
-  return best;
+  return { failed, total, rate: rate(failed, total) };
 }
 function syncByVersionSplit(idx, days, pivot) {
   const before = v => !!v && semverCmp(v, pivot) < 0;
@@ -1639,7 +1563,7 @@ function syncByVersionSplit(idx, days, pivot) {
       if (!set.has(r.day) || (r.event !== 'sync_failed' && r.event !== 'sync_completed') || !filter(r.v)) continue;
       total++; if (r.event === 'sync_failed') failed++;
     }
-    return { failed, total, rate: rate(failed, total, T.SYNC_FAIL_N_FLOOR) };
+    return { failed, total, rate: rate(failed, total) };
   };
   return { pivot,
     before: { ...count(before), night: nightBand(syncLocalHours(idx, days, before)) },
@@ -1668,12 +1592,12 @@ function writeFailureBreakdown(rows) {
 }
 
 // ══ 7. NUMBERS YOU CAN TRUST ══════════════════════════════════════════════
-/// `critical` feeders are the ones every number depends on; only they can
-/// take over Today. The rating snapshot makes one tile old, not the page.
+/// The feeders the page reads. Their freshness is printed as an age, never
+/// judged against a threshold (D-37): how old a number is is a fact.
 const FEEDERS = {
-  posthog: { label: 'Fleet (PostHog → fleet_events)', short: 'fleet', staleH: T.FEEDER_STALE_H.posthog, critical: true },
-  asc:     { label: 'Store (ASC → asc_downloads_daily)', short: 'store', staleH: T.FEEDER_STALE_H.asc, critical: true },
-  store:   { label: 'Rating (App Store → store_snapshot)', short: 'rating', staleH: T.FEEDER_STALE_H.store, critical: false },
+  posthog: { label: 'Fleet (PostHog → fleet_events)', short: 'fleet' },
+  asc:     { label: 'Store (ASC → asc_downloads_daily)', short: 'store' },
+  store:   { label: 'Rating (App Store → store_snapshot)', short: 'rating' },
 };
 const KNOWN_AUX_FEEDERS = new Set(['reconcile']);
 /// Freshness from the newest run that SUCCEEDED. A feeder name this page does
@@ -1689,8 +1613,8 @@ function feederFreshness(syncRuns, nowMs) {
     const lastOk = okRuns.length ? newest(okRuns, 'finished_at') : null;
     const lastAny = mine.length ? newest(mine, 'started_at') : null;
     const ageH = lastOk ? (nowMs - new Date(lastOk.finished_at).getTime()) / 3600000 : null;
-    out.push({ key, label: meta.label, short: meta.short, staleH: meta.staleH, critical: meta.critical, ageH,
-      everRan: !!lastAny, stale: ageH === null || ageH > meta.staleH,
+    out.push({ key, label: meta.label, short: meta.short, ageH,
+      everRan: !!lastAny,
       rows: lastOk ? lastOk.rows_upserted : null,
       lastError: lastAny && !lastAny.ok ? (lastAny.error || 'failed, no message') : null });
   }
@@ -1698,12 +1622,19 @@ function feederFreshness(syncRuns, nowMs) {
     const mine = syncRuns.filter(r => r.feeder === name);
     const okRuns = mine.filter(r => r.ok && r.finished_at);
     const lastOk = okRuns.length ? newest(okRuns, 'finished_at') : null;
-    out.push({ key: name, label: name, short: name, staleH: null, critical: false, unknown: true,
+    out.push({ key: name, label: name, short: name, unknown: true,
       ageH: lastOk ? (nowMs - new Date(lastOk.finished_at).getTime()) / 3600000 : null,
-      everRan: true, stale: false, rows: lastOk ? lastOk.rows_upserted : null,
-      lastError: `this page has no rule for a feeder called “${name}” — renamed, or a new feed nothing here reads` });
+      everRan: true, rows: lastOk ? lastOk.rows_upserted : null,
+      lastError: `this page does not read a feeder called “${name}” — renamed, or a new feed nothing here reads` });
   }
   return out;
+}
+/// How a feeder's newest run ended — a fact about the run, never a judgement
+/// on its age.
+function feederLastRun(f) {
+  if (f.unknown) return 'not read by this page';
+  if (!f.everRan) return 'never ran';
+  return f.lastError ? 'failed' : 'ok';
 }
 /// PostHog vs the app's own first-party channel: two independent paths out of
 /// the same first launch. DEBUG rows (b = '1') never reach PostHog and are
@@ -1752,202 +1683,7 @@ function fmtAgeH(h) {
 }
 
 /* =========================================================================
-   PART 3 — DECISION_RULES
-   =========================================================================
-   One registry. Every rule reads the context built from the WHOLE fleet over
-   fixed windows (filters never move a verdict), compares only against named
-   constants in `T`, and returns one plain sentence and one of four statuses.
-   ========================================================================= */
-const STATUS = { act: 'act', watch: 'watch', fine: 'fine', nodata: 'not enough data' };
-const STATUS_RANK = { act: 3, watch: 2, fine: 1, nodata: 0 };
-
-const DECISION_RULES = [
-  {
-    id: 'feeders', section: 'trust', title: 'Feeder freshness',
-    rule: `The fleet feeder must have succeeded within ${T.FEEDER_STALE_H.posthog}h and the store feeder within `
-        + `${T.FEEDER_STALE_H.asc}h. Either one late → act on the data first. A feeder that never ran is late. `
-        + `The rating snapshot is not critical and never takes over.`,
-    evaluate(c) {
-      if (!c.feeders) return { status: 'nodata', text: 'sync_runs could not be read, so how fresh any number is stays unknown.' };
-      const crit = c.feeders.filter(f => f.critical);
-      const stale = crit.filter(f => f.stale);
-      if (!stale.length) {
-        return { status: 'fine', text: `Both feeders are current — fleet ${fmtAgeH(crit[0].ageH)}, store ${fmtAgeH(crit[1].ageH)}.` };
-      }
-      const names = stale.map(f => `${f.short} (${f.everRan ? fmtAgeH(f.ageH) : 'never run'})`).join(' and ');
-      return { status: 'act', text: `Fix the sync job before reading anything else: ${names}. Until then this page reports on the sync job, not the product.` };
-    },
-  },
-  {
-    id: 'drift', section: 'trust', title: 'PostHog vs first-party',
-    rule: `Installs with funnel:app_first_launch in app_logs against first launches in fleet_events, same `
-        + `${RULE_WINDOW_DAYS} complete days, DEBUG rows dropped. Gap over the larger side above ${T.DRIFT_ACT_PCT}% → watch. `
-        + `Needs ${T.DRIFT_N_FLOOR} on the larger side.`,
-    evaluate(c) {
-      const x = c.xcheck;
-      if (!x) return { status: 'nodata', text: 'One of the two paths could not be read, so they cannot be compared.' };
-      if (x.n < T.DRIFT_N_FLOOR) return { status: 'nodata', text: `${x.firstParty} first-party against ${x.posthog} from PostHog — under ${T.DRIFT_N_FLOOR} either way, too thin to call drift.` };
-      if (x.driftPct > T.DRIFT_ACT_PCT) {
-        const lower = x.firstParty < x.posthog ? 'the first-party channel' : 'the PostHog feed';
-        return { status: 'watch', text: `The two paths disagree by ${Math.round(x.driftPct)}% (${x.firstParty} vs ${x.posthog}) — ${lower} is losing events, so every rate built on it reads low.` };
-      }
-      return { status: 'fine', text: `The two independent paths agree within ${Math.round(x.driftPct)}% (${x.firstParty} vs ${x.posthog}).` };
-    },
-  },
-  {
-    id: 'downloadLaunch', section: 'new', title: 'Download → first launch',
-    rule: `First launches ÷ first-time downloads over ${RULE_WINDOW_DAYS} days. Below ${T.DL_LAUNCH_WATCH_PCT}% on `
-        + `${T.DL_LAUNCH_N_FLOOR}+ downloads → watch. Never act: two populations joined by week.`,
-    evaluate(c) {
-      const d = c.dlLaunch;
-      if (d.downloads === null || d.launches === null) return { status: 'nodata', text: 'Downloads or first launches could not be read.' };
-      if (d.downloads < T.DL_LAUNCH_N_FLOOR) return { status: 'nodata', text: `${d.launches} first launches against ${d.downloads} downloads in ${RULE_WINDOW_DAYS} days — under ${T.DL_LAUNCH_N_FLOOR} downloads, a fraction to watch.` };
-      const pct = (d.launches / d.downloads) * 100;
-      if (pct < T.DL_LAUNCH_WATCH_PCT) return { status: 'watch', text: `Only ${d.launches} of ${d.downloads} downloads reached a first launch (${Math.round(pct)}%) — look at the store page and the first run.` };
-      return { status: 'fine', text: `${d.launches} first launches against ${d.downloads} downloads (${Math.round(pct)}%) over ${RULE_WINDOW_DAYS} days.` };
-    },
-  },
-  {
-    id: 'sourceMix', section: 'new', title: 'Where downloads come from',
-    rule: `Informational. Names the largest App Store source over ${RULE_WINDOW_DAYS} days and how its share moved against the ${RULE_WINDOW_DAYS} before.`,
-    evaluate(c) {
-      const s = c.sources;
-      if (!s || !s.total) return { status: 'nodata', text: 'No first-time downloads in the window, so there is no mix to read.' };
-      const top = s.sources[0];
-      const share = Math.round((top.total / s.total) * 100);
-      const moved = c.sourceShift;
-      const movedTxt = moved === null ? 'with no earlier window to compare'
-        : moved > 3 ? `up ${Math.round(moved)} points on the ${RULE_WINDOW_DAYS} days before`
-        : moved < -3 ? `down ${Math.round(-moved)} points on the ${RULE_WINDOW_DAYS} days before`
-        : 'level with the window before';
-      return { status: 'fine', text: `${top.total} of ${s.total} downloads came from ${top.name} (${share}%), ${movedTxt}.` };
-    },
-  },
-  {
-    id: 'activation', section: 'new', title: 'Activation',
-    rule: `Installs reaching a first score ÷ installs with a first launch, ${RULE_WINDOW_DAYS} days. `
-        + `< ${T.ACTIVATION_ACT_PCT}% → act · < ${T.ACTIVATION_WATCH_PCT}% → watch. Needs ${T.ACTIVATION_N_FLOOR} installs.`,
-    evaluate(c) {
-      const f = c.funnel;
-      if (!f) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
-      const score = f.find(s => s.key === 'score');
-      const den = score.of;
-      if (den < T.ACTIVATION_N_FLOOR) return { status: 'nodata', text: `${score.n} of ${den} installs reached a score — under ${T.ACTIVATION_N_FLOOR}, a fraction to watch.` };
-      const pct = (score.n / den) * 100;
-      const worst = worstFunnelDrop(f.slice(0, f.findIndex(s => s.key === 'score') + 1));
-      if (pct < T.ACTIVATION_ACT_PCT) return { status: 'act', text: `Only ${Math.round(pct)}% of ${den} installs ever saw a score — the biggest fall is ${worst.from} → ${worst.to}, ${worst.lost} people.` };
-      if (pct < T.ACTIVATION_WATCH_PCT) return { status: 'watch', text: `${Math.round(pct)}% of ${den} installs saw a score; the biggest fall is ${worst.from} → ${worst.to} (${worst.lost} people).` };
-      return { status: 'fine', text: `${Math.round(pct)}% of ${den} installs reached a score.` };
-    },
-  },
-  {
-    id: 'd1', section: 'ret', title: 'Day-1 return',
-    rule: `Installs active on exactly day 1 ÷ installs whose day 1 has finished, ${RULE_WINDOW_DAYS} days. `
-        + `< ${T.D1_ACT_PCT}% → act · < ${T.D1_WATCH_PCT}% → watch. Needs ${T.D1_N_FLOOR} installs.`,
-    evaluate(c) {
-      const d = c.d1;
-      if (!d) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
-      if (d.den < T.D1_N_FLOOR) return { status: 'nodata', text: `${d.num} of ${d.den} installs came back on day 1 — under ${T.D1_N_FLOOR}, a fraction, not a rate.` };
-      const pct = (d.num / d.den) * 100;
-      if (pct < T.D1_ACT_PCT) return { status: 'act', text: `The first session isn’t earning a second: ${Math.round(pct)}% of ${d.den} installs came back on day 1.` };
-      if (pct < T.D1_WATCH_PCT) return { status: 'watch', text: `Day 1 is ${Math.round(pct)}% over ${d.den} installs — enough to work, not enough to compound.` };
-      return { status: 'fine', text: `${Math.round(pct)}% of ${d.den} installs came back on day 1.` };
-    },
-  },
-  {
-    id: 'd7', section: 'ret', title: 'Day-7 return',
-    rule: `Same shape as day 1. < ${T.D7_ACT_PCT}% → act · < ${T.D7_WATCH_PCT}% → watch. Needs ${T.D7_N_FLOOR} installs whose day 7 has finished.`,
-    evaluate(c) {
-      const d = c.d7;
-      if (!d) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
-      if (d.den < T.D7_N_FLOOR) return { status: 'nodata', text: `${d.num} of ${d.den} installs were active on day 7 — under ${T.D7_N_FLOOR}, so no rate.` };
-      const pct = (d.num / d.den) * 100;
-      if (pct < T.D7_ACT_PCT) return { status: 'act', text: `Day 7 is ${Math.round(pct)}% over ${d.den} installs — almost nobody is still here a week in.` };
-      if (pct < T.D7_WATCH_PCT) return { status: 'watch', text: `Day 7 is ${Math.round(pct)}% over ${d.den} installs.` };
-      return { status: 'fine', text: `${Math.round(pct)}% of ${d.den} installs were still active on day 7.` };
-    },
-  },
-  {
-    id: 'stickiness', section: 'users', title: 'Stickiness',
-    rule: `DAU on the last complete day ÷ MAU over 30 days. Below ${T.STICKINESS_WATCH_PCT}% → watch. Needs MAU ${T.STICKINESS_N_FLOOR}+.`,
-    evaluate(c) {
-      const s = c.sticky;
-      if (!s) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
-      if (s.mau < T.STICKINESS_N_FLOOR) return { status: 'nodata', text: `${s.dau} active yesterday of ${s.mau} active in 30 days — too few for a ratio.` };
-      const pct = (s.dau / s.mau) * 100;
-      if (pct < T.STICKINESS_WATCH_PCT) return { status: 'watch', text: `${Math.round(pct)}% of the ${s.mau} people active this month opened Axon yesterday — a weekly habit, not a daily one.` };
-      return { status: 'fine', text: `${Math.round(pct)}% of the ${s.mau} people active this month opened Axon yesterday.` };
-    },
-  },
-  {
-    id: 'syncHealth', section: 'err', title: 'Sync health',
-    rule: `People with a real sync_failed ÷ people with any sync, ${RULE_REL_DAYS} days. > ${T.SYNC_FAIL_ACT_PCT}% → act · `
-        + `> ${T.SYNC_FAIL_WATCH_PCT}% → watch. Needs ${T.SYNC_FAIL_N_FLOOR}. db_locked (a locked phone) is benign: counted, never judged.`,
-    evaluate(c) {
-      const s = c.sync;
-      if (!s) return { status: 'nodata', text: 'The fleet warehouse could not be read.' };
-      const real = s.real ?? s.failed;
-      const benign = s.benign ? ` (${s.benign} more only ever hit a locked phone — benign)` : '';
-      if (s.trying < T.SYNC_FAIL_N_FLOOR) return { status: 'nodata', text: `${real} of ${s.trying} syncing installs saw a real failure${benign} — under ${T.SYNC_FAIL_N_FLOOR}, so no rate.` };
-      const pct = (real / s.trying) * 100;
-      const cause = (c.causes || []).find(x => !SYNC_BENIGN_CAUSES.has(x.cause)) || null;
-      const hr = c.topHour;
-      const where = [
-        cause ? `the top cause is ${cause.label} (${cause.users} of them)` : null,
-        hr ? `the worst local hour is ${String(hr.hour).padStart(2, '0')}:00 with ${hr.failed} of ${hr.total} failing` : null,
-      ].filter(Boolean).join(', and ');
-      if (pct > T.SYNC_FAIL_ACT_PCT) return { status: 'act', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure${benign} — ${where || 'no cause or hour could be attributed'}.` };
-      if (pct > T.SYNC_FAIL_WATCH_PCT) return { status: 'watch', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure${benign}; ${where || 'no cause could be attributed'}.` };
-      return { status: 'fine', text: `${Math.round(pct)}% of ${s.trying} syncing installs hit a real failure${benign}.` };
-    },
-  },
-];
-
-function evaluateRules(ctx) {
-  return DECISION_RULES.map(r => {
-    let out;
-    try { out = r.evaluate(ctx); }
-    catch (e) { out = { status: 'nodata', text: 'This rule could not be evaluated: ' + e.message }; }
-    return { ...r, ...out };
-  });
-}
-function rulesFor(verdicts, section) { return verdicts.filter(v => v.section === section); }
-function mostUrgent(verdicts) {
-  return verdicts.reduce((best, v) => (!best || STATUS_RANK[v.status] > STATUS_RANK[best.status]) ? v : best, null);
-}
-function sectionStatus(verdicts, section) {
-  const mine = rulesFor(verdicts, section);
-  return mine.length ? mostUrgent(mine).status : null;
-}
-/// Today: every act line, then every watch line; the rest collapse into one
-/// quiet sentence. A late CRITICAL feeder takes the block over, because every
-/// other sentence is then a claim about the sync job.
-function todayPlan(verdicts) {
-  const feeder = verdicts.find(v => v.id === 'feeders') || null;
-  const takeover = !!feeder && feeder.status === 'act';
-  const urgent = verdicts.filter(v => v.status === 'act' || v.status === 'watch')
-                         .sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status]);
-  const fine = verdicts.filter(v => v.status === 'fine');
-  const nodata = verdicts.filter(v => v.status === 'nodata');
-  return {
-    takeover, feeder: takeover ? feeder : null,
-    urgent: takeover ? [feeder] : urgent,
-    quiet: verdicts.filter(v => v.status === 'fine' || v.status === 'nodata'),
-    fine, nodata,
-    clear: !takeover && urgent.length === 0,
-    // "Nothing to decide" and "nothing could be decided" are different facts.
-    blind: !takeover && urgent.length === 0 && fine.length === 0 && nodata.length > 0,
-  };
-}
-function clearSentence(plan) {
-  const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
-  if (plan.blind) return `Nothing could be decided yet — ${n(plan.nodata.length, 'check is', 'checks are')} waiting on data.`;
-  if (plan.nodata.length) return `Nothing to decide today. ${n(plan.fine.length, 'check reads', 'checks read')} fine, ${n(plan.nodata.length, 'is', 'are')} waiting on data.`;
-  return `Nothing to decide today. ${n(plan.fine.length, 'check', 'checks')} ran, all fine.`;
-}
-
-/* =========================================================================
-   PART 4 — RENDER
+   PART 3 — RENDER
    ========================================================================= */
 function escHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -2430,8 +2166,55 @@ const TILES = [
       return peopleTable(st ? st.people : [], `${st ? st.label : step} · week of ${fmtDay(w)} · ${st ? st.n : 0} people`);
     },
   },
+  {
+    id: 'new.steps', section: 'new', title: 'First launch to day 2, every step',
+    def: 'Installs whose first launch fell in the range, through each step in order. Each step is the same people as the one before; percentages are of first launches.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const f = installFunnel(installsIn(cx.idx, cx.days));
+      if (!f[0].n) return emptyHtml('No first launch in this range.');
+      const score = f.find(s => s.key === 'score');
+      const worst = worstFunnelDrop(f);
+      return `<div class="kpis">${kpi('First launches', fmtInt(f[0].n), cx.label)}${kpi('Saw a score', rateVal(score.rate, true), rateSub(score.rate, 'installs'), null, true)}</div>`
+        + barRows(f.map(s => ({ name: s.label, count: s.n, key: s.key, rate: s.rate })), SERIES[0],
+            { tileId: this.id, drill: r => (r.count ? 'step|' + r.key : null), fmt: r => `<b>${escHtml(fmtInt(r.count))}</b>${r.key === 'launch' ? '' : ` · ${escHtml(r.rate.text)}`}` })
+        + (worst.lost ? `<div class="gap-note">Most people left between ${escHtml(worst.from)} and ${escHtml(worst.to)}: ${worst.lost}.</div>` : '');
+    },
+    table(cx) {
+      const f = cx.idx ? installFunnel(installsIn(cx.idx, cx.days)) : [];
+      return { cols: [{ key: 'label', label: 'Step' }, { key: 'n', label: 'People', num: true }, { key: 'pct', label: 'Of first launches', num: true, fmt: (v, r) => r.txt }],
+               rows: f.map(s => ({ label: s.label, n: s.n, pct: s.rate.pct, txt: s.rate.text, _drill: s.n ? 'step|' + s.key : null })) };
+    },
+    drill(key, cx) {
+      const [, k] = splitKey(key);
+      const st = installFunnel(installsIn(cx.idx, cx.days)).find(s => s.key === k);
+      return peopleTable(st ? st.people : [], `${st ? st.label : k} · ${st ? st.n : 0} people`);
+    },
+  },
 
   // ── 3. RETENTION ──────────────────────────────────────────────────────
+  {
+    id: 'ret.days', section: 'ret', title: 'Day 1 and day 7',
+    def: 'Installs active on exactly day 1 (or day 7) after their first launch ÷ installs whose day 1 (or day 7) fell in the range.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      return `<div class="kpis">${[1, 7].map(n => {
+        const r = pooledRetention(cx.idx, cx.days, n);
+        return `<div${drillAttr(this.id, r.num ? 'ret|' + n : null, `${r.num} of ${r.den} installs active on day ${n}`)}>${kpi(`Day ${n}`, rateVal(r.rate, true), rateSub(r.rate, 'installs'))}</div>`;
+      }).join('')}</div>`;
+    },
+    table(cx) {
+      return { cols: [{ key: 'label', label: 'Day' }, { key: 'num', label: 'Came back', num: true }, { key: 'den', label: 'Installs', num: true }, { key: 'pct', label: 'Share', num: true, fmt: (v, r) => r.txt }],
+               rows: cx.idx ? [1, 7].map(n => { const r = pooledRetention(cx.idx, cx.days, n); return { label: `Day ${n}`, num: r.num, den: r.den, pct: r.rate.pct, txt: r.rate.text, _drill: r.num ? 'ret|' + n : null }; }) : [] };
+    },
+    drill(key, cx) {
+      const [, n] = splitKey(key);
+      const r = pooledRetention(cx.idx, cx.days, Number(n));
+      return peopleTable(r.back, `Active on day ${n} · ${r.num} of ${r.den} installs`);
+    },
+  },
   {
     id: 'ret.install', section: 'ret', wide: true, title: 'Install cohorts — still active, week by week',
     def: 'Row = people whose first launch fell in that week. Column = weeks since. Cell = share of the row active any day that week.',
@@ -2688,17 +2471,17 @@ const TILES = [
   },
   {
     id: 'trust.fresh', section: 'trust', title: 'Last sync, per feeder and table',
-    def: 'Each feeder’s last successful run (sync_runs) and the newest row each table holds. A feeder that never ran reads never, not 0h.',
+    def: 'Each feeder’s last successful run and how its newest run ended (sync_runs), and the newest row each table holds. A feeder that never ran reads never, not 0h.',
     natural: null, filters: { version: false, country: false },
     view(cx) {
       const fe = cx.feeders;
-      const feRows = fe ? fe.map(f => `<tr${drillAttr(this.id, 'feeder|' + f.key, f.lastError || null)}><td>${escHtml(f.short)}</td><td class="num">${escHtml(f.everRan ? fmtAgeH(f.ageH) : 'never')}</td><td>${f.unknown ? '<span class="chip chip-watch">unknown</span>' : f.stale ? `<span class="chip chip-${f.critical ? 'act' : 'watch'}">late</span>` : '<span class="chip chip-fine">ok</span>'}</td></tr>`).join('') : '';
+      const feRows = fe ? fe.map(f => `<tr${drillAttr(this.id, 'feeder|' + f.key, f.lastError || null)}><td>${escHtml(f.short)}</td><td class="num">${escHtml(f.everRan ? fmtAgeH(f.ageH) : 'never')}</td><td>${escHtml(feederLastRun(f))}</td></tr>`).join('') : '';
       const tf = tableFreshness(cx.src).map(t => `<tr><td>${escHtml(t.table)}</td><td class="num" colspan="2">${t.unread ? '<span class="dash">unread</span>' : t.newest ? escHtml(t.kind === 'day' ? fmtDay(t.newest) : `${fmtDay(istDay(t.newest))}`) : 'empty'}</td></tr>`).join('');
-      return (fe ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Feeder</th><th class="num">Last OK</th><th></th></tr></thead><tbody>${feRows}</tbody></table></div>` : unreadHtml('sync_runs', cx.src))
+      return (fe ? `<div class="tbl-wrap"><table class="t"><thead><tr><th>Feeder</th><th class="num">Last OK</th><th>Newest run</th></tr></thead><tbody>${feRows}</tbody></table></div>` : unreadHtml('sync_runs', cx.src))
         + `<div class="tbl-wrap" style="margin-top:12px"><table class="t"><thead><tr><th>Table</th><th class="num" colspan="2">Newest row</th></tr></thead><tbody>${tf}</tbody></table></div>`
         + `<div class="gap-note">Fetch caps: ${(FLEET_PAGE * FLEET_MAX_PAGES).toLocaleString('en-US')} fleet rows${cx.src.fleetCapped ? ' — HIT, oldest rows missing' : ', not hit'}; ${(LOG_PAGE * LOG_MAX_PAGES).toLocaleString('en-US')} funnel rows${cx.src.funnelCapped ? ' — HIT' : ', not hit'}.</div>`;
     },
-    table(cx) { return { cols: [{ key: 'short', label: 'Feeder' }, { key: 'age', label: 'Hours since OK', num: true, fmt: v => (v === null ? 'never' : v.toFixed(1)) }, { key: 'staleH', label: 'Late after (h)', num: true }, { key: 'rows', label: 'Rows last run', num: true }, { key: 'lastError', label: 'Last error' }], rows: (cx.feeders || []).map(f => ({ ...f, age: f.ageH, _drill: 'feeder|' + f.key })) }; },
+    table(cx) { return { cols: [{ key: 'short', label: 'Feeder' }, { key: 'age', label: 'Hours since OK', num: true, fmt: v => (v === null ? 'never' : v.toFixed(1)) }, { key: 'rows', label: 'Rows last run', num: true }, { key: 'lastError', label: 'Last error' }], rows: (cx.feeders || []).map(f => ({ ...f, age: f.ageH, _drill: 'feeder|' + f.key })) }; },
     drill(key, cx) {
       const [, k] = splitKey(key);
       const rows = (cx.src.syncRuns || []).filter(r => r.feeder === k).slice(0, 30).map(r => ({ started: r.started_at ? r.started_at.slice(0, 16).replace('T', ' ') + ' UTC' : '—', ok: r.ok ? 'ok' : 'failed', rows: r.rows_upserted, error: r.error || '' }));
@@ -2725,8 +2508,8 @@ let F = defaultFilters();
 const UI = { tiles: Object.create(null) };
 function uiOf(id) { return UI.tiles[id] || (UI.tiles[id] = { open: false, range: null, drill: null, sort: null, dsort: null }); }
 let DATA_VERSION = 0;
-let _base = null, _baseKey = '', _rules = null, _rulesKey = -1, _idxAll = null, _idxAllKey = -1;
-function invalidate() { DATA_VERSION++; _base = null; _rules = null; _idxAll = null; }
+let _base = null, _baseKey = '', _idxAll = null, _idxAllKey = -1;
+function invalidate() { DATA_VERSION++; _base = null; _idxAll = null; }
 
 /// Pure: everything every tile reads, for one snapshot of the sources and one
 /// set of filters. The page memoises it; `?selftest` calls it directly.
@@ -2746,38 +2529,6 @@ function currentBase() {
   _base = buildBase(D, F, today, Date.now(), _idxAll);
   _baseKey = key;
   return _base;
-}
-/// The decision rules read the WHOLE fleet over fixed windows.
-function buildRuleContext(B) {
-  const idx = B.idxAll, today = B.today;
-  const w = completeDays(today, RULE_WINDOW_DAYS), p = priorCompleteDays(today, RULE_WINDOW_DAYS), rel = completeDays(today, RULE_REL_DAYS);
-  const c = { today };
-  c.sources = B.dlAll ? downloadsByDaySource(B.dlAll, w) : null;
-  const prev = B.dlAll ? downloadsByDaySource(B.dlAll, p) : null;
-  c.sourceShift = null;
-  if (c.sources && c.sources.total && prev && prev.total) {
-    const top = c.sources.sources[0].name;
-    const pt = prev.sources.find(s => s.name === top);
-    c.sourceShift = (c.sources.sources[0].total / c.sources.total) * 100 - ((pt ? pt.total : 0) / prev.total) * 100;
-  }
-  c.dlLaunch = { downloads: B.dlAll ? downloadsOn(B.dlAll, w) : null, launches: idx ? installsIn(idx, w).length : null };
-  c.funnel  = idx ? installFunnel(installsIn(idx, w)) : null;
-  c.d1      = idx ? pooledRetention(idx, w, 1) : null;
-  c.d7      = idx ? pooledRetention(idx, w, 7) : null;
-  c.sticky  = idx ? stickiness(idx, today) : null;
-  c.sync    = idx ? syncWindow(idx, rel) : null;
-  c.causes  = idx ? syncCauses(idx, rel) : null;
-  const hrs = idx ? syncLocalHours(idx, rel, null) : null;
-  c.topHour = hrs ? topHour(hrs) : null;
-  c.feeders = B.feeders;
-  c.xcheck  = crossCheck(B.src.funnelLogs, idx, w);
-  return c;
-}
-function currentVerdicts(B) {
-  if (_rules && _rulesKey === DATA_VERSION) return _rules;
-  _rules = evaluateRules(buildRuleContext(B));
-  _rulesKey = DATA_VERSION;
-  return _rules;
 }
 /// A tile's context: the base plus its own days (the tile's override, else
 /// the page range, else — on "Default" — the tile's natural window).
@@ -2848,35 +2599,29 @@ function renderTile(t, B) {
   return host;
 }
 
-/* ── Today, notes, section lines ───────────────────────────────────────── */
-const SECTION_LABEL = { users: 'Users', new: 'New users', ret: 'Retention', use: 'What they use', fb: 'Feedback', err: 'Errors', trust: 'Trust' };
+/* ── Status line, notes, section subtitles ────────────────────────────── */
+/// One line at the top: the last complete day the windows end on, and how old
+/// each feeder's data is. Ages are facts; nothing here is judged (D-37).
 function feederPills(B) {
   const fe = B.feeders;
-  const pill = (name, cls, tip) => `<span class="fpill ${cls}" title="${escHtml(tip)}"><i></i>${escHtml(name)}</span>`;
+  const pill = (text, cls, tip) => `<span class="fpill ${cls}" title="${escHtml(tip)}"><i></i>${escHtml(text)}</span>`;
   const one = key => {
-    if (!fe) return pill(key === 'asc' ? 'store' : 'fleet', '', 'sync_runs could not be read — freshness unknown');
+    if (!fe) return pill(key === 'asc' ? 'store · unknown' : 'fleet · unknown', 'bad', 'sync_runs could not be read — how old the data is stays unknown');
     const f = fe.find(x => x.key === key);
-    return pill(f.short, f.stale ? 'bad' : 'ok', `${f.label} — last good run ${f.everRan ? fmtAgeH(f.ageH) : 'never'} · late after ${f.staleH}h`);
+    const age = f.everRan && f.ageH !== null ? fmtAgeH(f.ageH) : 'never';
+    return pill(`${f.short} · ${age}`, !f.everRan || f.lastError ? 'bad' : 'ok',
+      `${f.label} — last good run ${age}` + (f.lastError ? ` · newest run failed: ${f.lastError}` : ''));
   };
   const roster = ['profiles', 'feedback', 'app_logs (write failures)'];
   const unread = roster.filter(t => (t === 'profiles' ? B.src.profiles : t === 'feedback' ? B.src.feedback : B.src.writeFails) === null);
   const rosterPill = pill('roster', unread.length ? 'bad' : 'ok', unread.length ? `Could not read: ${unread.join(', ')}` : 'profiles, feedback and app_logs read live from Supabase');
   return one('asc') + one('posthog') + rosterPill;
 }
-function renderToday(B, verdicts) {
-  const plan = todayPlan(verdicts);
-  const lines = plan.urgent.map(v => `<div class="v-row"><span class="chip chip-${v.status}">${escHtml(STATUS[v.status])}</span>
-      <div class="v-text" title="${escHtml(v.title + ' — ' + v.rule)}">${escHtml(v.text)}</div>
-      <a class="v-where" href="#s-${escHtml(v.section)}">${escHtml(SECTION_LABEL[v.section] || v.section)}</a></div>`).join('');
-  const quietTip = plan.quiet.map(v => `${STATUS[v.status]} — ${v.title}: ${v.text}`).join('\n');
-  const body = plan.clear
-    ? `<div class="quiet" title="${escHtml(quietTip)}">${escHtml(clearSentence(plan))}</div>`
-    : lines + (plan.quiet.length && !plan.takeover ? `<div class="gap-note" title="${escHtml(quietTip)}">${plan.quiet.length} more ${plan.quiet.length === 1 ? 'check has' : 'checks have'} nothing to decide.</div>` : '');
-  el('s-today').innerHTML = `<div class="today${plan.takeover ? ' takeover' : ''}">
-      <div class="today-head"><h2>Today</h2><span class="dim" style="font-size:var(--t5)" title="Verdicts read the whole fleet over fixed windows; the filters never move them.">${escHtml(fmtDay(lastCompleteDay(B.today)))} · last complete day</span>
-      <div class="fpills">${feederPills(B)}</div></div>${body}</div>`;
-  document.querySelector('main').classList.toggle('dimmed', plan.takeover);
+function statusHtml(B) {
+  return `<div class="status-line"><span class="dim">Windows end ${escHtml(fmtDay(lastCompleteDay(B.today)))}, the last complete day</span>
+      <div class="fpills">${feederPills(B)}</div></div>`;
 }
+function renderStatus(B) { el('s-status').innerHTML = statusHtml(B); }
 function renderNotes(B) {
   const notes = [];
   const note = (cls, html) => notes.push(`<div class="note ${cls}">${html}</div>`);
@@ -2885,24 +2630,23 @@ function renderNotes(B) {
   if (B.src.fleetCapped) note('note-warn', `<b>The ${(B.src.fleetCap || 0).toLocaleString('en-US')}-row fetch cap was hit.</b> The oldest rows are missing, so the earliest cohorts read low.`);
   if (filtersActive(B.f)) {
     const bits = [B.f.versions.length ? 'version ' + B.f.versions.join(', ') : null, B.f.countries.length ? 'country ' + B.f.countries.join(', ') : null].filter(Boolean).join(' · ');
-    note('', `<b>Filtered:</b> ${escHtml(bits)}. Every chart below honours it or says it cannot. Today’s verdicts always read the whole fleet.`);
+    note('', `<b>Filtered:</b> ${escHtml(bits)}. Every chart below honours it or says it cannot.`);
   }
   el('top-notes').innerHTML = notes.join('');
 }
-const SECTION_FALLBACK = {
-  use: 'Share of each week’s actives who used a screen or a feature.',
-  fb: 'Word for word, newest first — plus the App Store’s own count.',
+/// A section subtitle is what the section holds — at most six words, never a
+/// reading of the numbers.
+const SECTION_SUB = {
+  users: 'Who opens Axon, and how often.',
+  new: 'Downloads, and the steps after them.',
+  ret: 'Who comes back, and when.',
+  use: 'Screens, features, notifications, campaigns.',
+  fb: 'Word for word, plus the rating.',
+  err: 'Sign-in, sync and write failures.',
+  trust: 'Where each number comes from.',
 };
-function renderSums(verdicts) {
-  for (const s of ['users', 'new', 'ret', 'use', 'fb', 'err', 'trust']) {
-    const host = el('sum-' + s);
-    if (!host) continue;
-    const mine = rulesFor(verdicts, s);
-    const head = mostUrgent(mine);
-    host.innerHTML = head
-      ? `<span class="chip chip-${head.status}" title="${escHtml(head.title + ' — ' + head.rule)}">${escHtml(STATUS[head.status])}</span> ${filtersActive(F) ? '<span class="dim">Whole fleet:</span> ' : ''}${escHtml(head.text)}`
-      : escHtml(SECTION_FALLBACK[s] || '');
-  }
+function renderSubs() {
+  for (const [s, txt] of Object.entries(SECTION_SUB)) { const host = el('sum-' + s); if (host) host.textContent = txt; }
 }
 
 /* ── Controls ──────────────────────────────────────────────────────────── */
@@ -2956,11 +2700,10 @@ function applyFilters() {
 /* ── Render ────────────────────────────────────────────────────────────── */
 function render() {
   const B = currentBase();
-  const verdicts = currentVerdicts(B);
   renderControls(B);
-  renderToday(B, verdicts);
+  renderStatus(B);
   renderNotes(B);
-  renderSums(verdicts);
+  renderSubs();
   for (const t of TILES) renderTile(t, B);
 }
 function rerenderTile(id, focusDrill) {
@@ -3077,7 +2820,7 @@ function setTheme(theme, remember) {
 }
 
 /* =========================================================================
-   PART 5 — ?demo
+   PART 4 — ?demo
    =========================================================================
    A deterministic synthetic warehouse: ~70 persons over 70 days, legacy
    installs, upgrades across four versions, sign-ins that fail three ways,
@@ -3085,7 +2828,7 @@ function setTheme(theme, remember) {
    snapshot, and a midnight sync-failure cluster on ≤1.9.4 that is GONE on
    1.9.5+. Seeded, so the same URL renders the same page every time.
 
-     ?demo  ·  ?demo&stale (both critical feeders late)  ·  ?demo&empty
+     ?demo  ·  ?demo&stale (old store run, failed fleet run)  ·  ?demo&empty
    ========================================================================= */
 function mulberry32(a) {
   return function () {
@@ -3305,18 +3048,18 @@ function loadDemo(opts) {
   invalidate();
   showPage();
   el('refresh-btn').style.display = 'none';
-  el('last-updated').innerHTML = `<span style="color:var(--watch)">Demo — made-up data${opts.stale ? ', feeders late' : ''}${opts.empty ? ', empty warehouse' : ''}</span>`;
+  el('last-updated').innerHTML = `<span style="color:var(--watch)">Demo — made-up data${opts.stale ? ', old feeder runs' : ''}${opts.empty ? ', empty warehouse' : ''}</span>`;
   el('sub-line').textContent = 'Made-up data · nothing on this screen is real';
   render();
 }
 
 /* =========================================================================
-   PART 6 — ?selftest
+   PART 5 — ?selftest
    =========================================================================
    No network, no login, no clock (every date is pinned). Covers every
    reducer, both triangles, the filters (a filter must change every tile that
-   says it honours it), the drill, unread ≠ zero and the n floor, and every
-   decision rule below, at and above its threshold.
+   says it honours it), the drill, unread ≠ zero and the n floor, and the
+   D-37 law: no verdict, threshold, target or pace anywhere on the page.
    ========================================================================= */
 function runSelfTest() {
   const staticMarkup = document.body.innerHTML;
@@ -3668,7 +3411,8 @@ function runSelfTest() {
     ], NOW);
     eq('feeders: freshness from the last run that SUCCEEDED', Math.round(feed.find(f => f.key === 'posthog').ageH), 1);
     ok('feeders: a failing newest run is surfaced', /rate limited/.test(feed.find(f => f.key === 'posthog').lastError));
-    ok('feeders: the rating feeder that never ran is late but NOT critical', feed.find(f => f.key === 'store').stale && !feed.find(f => f.key === 'store').critical);
+    ok('feeders: a feeder that never ran reads never, with no age', !feed.find(f => f.key === 'store').everRan && feed.find(f => f.key === 'store').ageH === null && feederLastRun(feed.find(f => f.key === 'store')) === 'never ran');
+    eq('feeders: the newest run failing reads failed, not ok', feederLastRun(feed.find(f => f.key === 'posthog')), 'failed');
     ok('feeders: the known nightly reconcile run is not an unknown feeder', !feed.some(f => f.key === 'reconcile'));
     const odd = feederFreshness([{ feeder: 'posthog_fleet', started_at: '2026-09-19T05:00:00Z', finished_at: '2026-09-19T05:01:00Z', ok: true }], NOW);
     ok('feeders: a name this page does not know still gets a row, flagged', odd.some(f => f.key === 'posthog_fleet' && f.unknown));
@@ -3713,10 +3457,7 @@ function runSelfTest() {
     eq('filters: the date range changes every windowed tile', rSame, []);
     ok('filters: a tile’s own range override beats the page range',
        tileCtx(TILES[0], B, { kind: 'n', n: 7 }).days.length === 7 && tileCtx(TILES[0], B).days.length === 90);
-    const vr0 = evaluateRules(buildRuleContext(B)).map(v => v.status + v.text).join();
-    const vr1 = evaluateRules(buildRuleContext(withC)).map(v => v.status + v.text).join();
-    eq('filters: verdicts read the whole fleet — a filter never moves one', vr1, vr0);
-    ok('filters: the filtered base keeps the whole fleet for verdicts', withC.idxAll.list.length === B.idxAll.list.length && withC.idx.list.length < B.idxAll.list.length);
+    ok('filters: the filtered base keeps the whole fleet beside the slice (the trust tiles read it)', withC.idxAll.list.length === B.idxAll.list.length && withC.idx.list.length < B.idxAll.list.length);
 
     // ── N. The drill ──────────────────────────────────────────────────────
     const drillKeys = t => [...t.view.call(t, tileCtx(t, B)).matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"'));
@@ -3760,67 +3501,41 @@ function runSelfTest() {
     ok('demo: the midnight cluster is on old builds and not on 1.9.5+', dSplit.before.night.failed > 0 && (dSplit.after.night.rate.pct || 0) < (dSplit.before.night.rate.pct || 0));
     ok('demo: 8 complete weeks of install cohorts', tcx.mondays.length === 8);
     ok('demo: the empty scenario reads every table and returns no rows', buildDemo({ empty: true, today: demoToday, nowMs: NOW }).fleet.length === 0);
-    ok('demo: the stale scenario makes a CRITICAL feeder late', feederFreshness(buildDemo({ stale: true, today: demoToday, nowMs: NOW }).syncRuns, NOW).some(f => f.critical && f.stale));
-    ok('demo: the default scenario has no late feeder', feederFreshness(demo.syncRuns, NOW).every(f => !f.stale));
+    const staleFeed = feederFreshness(buildDemo({ stale: true, today: demoToday, nowMs: NOW }).syncRuns, NOW);
+    ok('demo: the stale scenario has old runs and a failed fleet run', staleFeed.find(f => f.key === 'asc').ageH > 48 && feederLastRun(staleFeed.find(f => f.key === 'posthog')) === 'failed');
+    ok('demo: the default scenario has every feeder run ok within the day', feederFreshness(demo.syncRuns, NOW).every(f => f.ageH < 24 && !f.lastError));
     ok('demo: deterministic', buildDemo({ today: demoToday, nowMs: NOW }).fleet.length === demo.fleet.length);
     const eB = buildBase(Object.assign({ sourceErrors: {} }, buildDemo({ empty: true, today: demoToday, nowMs: NOW })), defaultFilters(), demoToday, NOW);
     ok('demo: on an empty warehouse no tile throws', TILES.every(t => !/could not be drawn/.test(tileHtml(t, eB))));
     ok('demo: on the full fixture no tile throws', TILES.every(t => !/could not be drawn/.test(tileHtml(t, B))));
   }
 
-  // ── P. Every decision rule, at its threshold ────────────────────────────
+  // ── P. D-37: historical metrics only ────────────────────────────────────
   {
-    const rule = id => DECISION_RULES.find(r => r.id === id);
-    const verdict = (id, ctx) => rule(id).evaluate(ctx).status;
-    ok('rules: unique ids', new Set(DECISION_RULES.map(r => r.id)).size === DECISION_RULES.length);
-    ok('rules: every rule has a section on this page', DECISION_RULES.every(r => SECTION_LABEL[r.section]));
-    ok('rules: the feeder rule is first', DECISION_RULES[0].id === 'feeders');
-    ok('rules: the sign-in reach rule is gone', !DECISION_RULES.some(r => r.id === 'signin'));
-    eq('d1: below act → act', verdict('d1', { d1: { num: T.D1_ACT_PCT - 1, den: 100 } }), 'act');
-    eq('d1: at act → watch', verdict('d1', { d1: { num: T.D1_ACT_PCT, den: 100 } }), 'watch');
-    eq('d1: at watch → fine', verdict('d1', { d1: { num: T.D1_WATCH_PCT, den: 100 } }), 'fine');
-    eq('d1: below the n floor → no verdict', verdict('d1', { d1: { num: 0, den: T.D1_N_FLOOR - 1 } }), 'nodata');
-    eq('d1: at the n floor it judges', verdict('d1', { d1: { num: 0, den: T.D1_N_FLOOR } }), 'act');
-    eq('d7: below act → act', verdict('d7', { d7: { num: T.D7_ACT_PCT - 1, den: 100 } }), 'act');
-    eq('d7: at watch → fine', verdict('d7', { d7: { num: T.D7_WATCH_PCT, den: 100 } }), 'fine');
-    eq('d7: below the n floor → no verdict', verdict('d7', { d7: { num: 1, den: T.D7_N_FLOOR - 1 } }), 'nodata');
-    const ff = (n, of) => ['launch', 'onboard', 'health', 'sync', 'score', 'day2'].map((k, i) => ({ key: k, label: k, n: i ? n : of, of }));
-    eq('activation: below act → act', verdict('activation', { funnel: ff(T.ACTIVATION_ACT_PCT - 1, 100) }), 'act');
-    eq('activation: at act → watch', verdict('activation', { funnel: ff(T.ACTIVATION_ACT_PCT, 100) }), 'watch');
-    eq('activation: at watch → fine', verdict('activation', { funnel: ff(T.ACTIVATION_WATCH_PCT, 100) }), 'fine');
-    eq('activation: below the n floor → no verdict', verdict('activation', { funnel: ff(1, T.ACTIVATION_N_FLOOR - 1) }), 'nodata');
-    eq('activation: unread is not failing', verdict('activation', { funnel: null }), 'nodata');
-    const sc = (failed, trying) => ({ sync: { failed, real: failed, benign: 0, trying }, causes: [], topHour: null });
-    eq('sync: at act → watch', verdict('syncHealth', sc(T.SYNC_FAIL_ACT_PCT, 100)), 'watch');
-    eq('sync: above act → act', verdict('syncHealth', sc(T.SYNC_FAIL_ACT_PCT + 1, 100)), 'act');
-    eq('sync: at watch → fine', verdict('syncHealth', sc(T.SYNC_FAIL_WATCH_PCT, 100)), 'fine');
-    eq('sync: below the n floor → no verdict', verdict('syncHealth', sc(9, T.SYNC_FAIL_N_FLOOR - 1)), 'nodata');
-    eq('sync: only db_locked failures read fine', verdict('syncHealth', { sync: { failed: 60, real: 0, benign: 60, trying: 100 }, causes: [], topHour: null }), 'fine');
-    ok('sync: it names the top real cause and the worst hour', /HealthKit query/.test(rule('syncHealth').evaluate({ sync: { failed: 40, real: 40, benign: 0, trying: 100 },
-       causes: [{ cause: 'db_locked', label: 'locked', users: 50 }, { cause: 'query', label: 'HealthKit query (query)', users: 12 }], topHour: { hour: 1, failed: 30, total: 33 } }).text));
-    eq('download→launch: below watch → watch', verdict('downloadLaunch', { dlLaunch: { downloads: 100, launches: T.DL_LAUNCH_WATCH_PCT - 1 } }), 'watch');
-    eq('download→launch: at the threshold → fine', verdict('downloadLaunch', { dlLaunch: { downloads: 100, launches: T.DL_LAUNCH_WATCH_PCT } }), 'fine');
-    ok('download→launch: it can never say act', [0, 10, 49, 99].every(l => verdict('downloadLaunch', { dlLaunch: { downloads: 100, launches: l } }) !== 'act'));
-    eq('stickiness: below → watch', verdict('stickiness', { sticky: { dau: T.STICKINESS_WATCH_PCT - 1, mau: 100 } }), 'watch');
-    eq('stickiness: at → fine', verdict('stickiness', { sticky: { dau: T.STICKINESS_WATCH_PCT, mau: 100 } }), 'fine');
-    eq('stickiness: below the n floor → no verdict', verdict('stickiness', { sticky: { dau: 1, mau: T.STICKINESS_N_FLOOR - 1 } }), 'nodata');
-    eq('drift: at the threshold → fine', verdict('drift', { xcheck: { n: 100, driftPct: T.DRIFT_ACT_PCT, firstParty: 75, posthog: 100 } }), 'fine');
-    eq('drift: above → watch', verdict('drift', { xcheck: { n: 100, driftPct: T.DRIFT_ACT_PCT + 1, firstParty: 74, posthog: 100 } }), 'watch');
-    eq('drift: below the n floor → no verdict', verdict('drift', { xcheck: { n: T.DRIFT_N_FLOOR - 1, driftPct: 90, firstParty: 1, posthog: 9 } }), 'nodata');
-    const fd = (a, b, c) => [{ short: 'fleet', critical: true, stale: a, ageH: 1, everRan: true }, { short: 'store', critical: true, stale: b, ageH: 2, everRan: true }, { short: 'rating', critical: false, stale: c, ageH: 99, everRan: true }];
-    eq('feeders: a late critical feeder → act', verdict('feeders', { feeders: fd(false, true, false) }), 'act');
-    eq('feeders: a late rating snapshot alone never takes over', verdict('feeders', { feeders: fd(false, false, true) }), 'fine');
-    eq('feeders: unread → no verdict', verdict('feeders', { feeders: null }), 'nodata');
-    eq('source mix: no downloads → no mix', verdict('sourceMix', { sources: { total: 0, sources: [] } }), 'nodata');
-
-    const tv = [{ id: 'feeders', section: 'trust', status: 'fine' }, { id: 'a', section: 'new', status: 'watch' }, { id: 'b', section: 'ret', status: 'act' }, { id: 'd', section: 'users', status: 'nodata' }];
-    const plan = todayPlan(tv);
-    eq('today: act before watch', plan.urgent.map(v => v.id), ['b', 'a']);
-    ok('today: quiet = fine + no data', plan.quiet.length === 2 && !plan.clear);
-    ok('today: all fine reads "nothing to decide"', /Nothing to decide today/.test(clearSentence(todayPlan([{ id: 'feeders', status: 'fine' }]))));
-    ok('today: nothing readable is blind, never "nothing to decide"', /could be decided/.test(clearSentence(todayPlan([{ id: 'x', status: 'nodata' }]))));
-    ok('today: a late critical feeder takes over', todayPlan([{ id: 'feeders', status: 'act' }, { id: 'b', status: 'act' }]).urgent.length === 1);
-    ok('rules: a throwing rule degrades, never takes the page down', evaluateRules({}).every(v => STATUS[v.status] !== undefined));
+    const pToday = todayIST();
+    const pSrc = Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, buildDemo({ today: pToday, nowMs: NOW }));
+    const pB = buildBase(pSrc, defaultFilters(), pToday, NOW);
+    const sB = buildBase(Object.assign({ sourceErrors: {} }, buildDemo({ stale: true, today: pToday, nowMs: NOW })), defaultFilters(), pToday, NOW);
+    ok('D-37: no decision rules, verdicts or Today plan remain',
+       [typeof DECISION_RULES, typeof evaluateRules, typeof todayPlan, typeof currentVerdicts, typeof STATUS].every(x => x === 'undefined'));
+    ok('D-37: T holds only n floors', Object.keys(T).length > 0 && Object.keys(T).every(k => /_N_FLOOR$/.test(k)));
+    ok('D-37: a feeder carries an age and a last run, never a lateness threshold',
+       pB.feeders.every(f => !('stale' in f) && !('staleH' in f) && !('critical' in f)) && sB.feeders.every(f => !('stale' in f)));
+    const shown = [statusHtml(pB), statusHtml(sB), ...TILES.map(t => tileHtml(t, pB))].join(' ');
+    ok('D-37: no verdict chip anywhere on the page', !/chip-(act|watch|fine|nodata)/.test(shown + staticMarkup));
+    const words = /\b(verdict|kill bar|kill rule|on pace|on track|projected|projection|nothing to decide|late after|act now)\b/i;
+    eq('D-37: no verdict, kill-bar or pace words in what the page shows', (strip(shown).match(words) || [null])[0], null);
+    ok('D-37: section subtitles say what a section holds, six words at most', Object.keys(SECTION_SUB).every(k => staticMarkup.includes(`id="sum-${k}"`)) && Object.values(SECTION_SUB).every(t => t.split(/\s+/).length <= 6));
+    ok('status: each feeder prints its age', /store · 6h ago/.test(statusHtml(pB)) && /fleet · 30m ago/.test(statusHtml(pB)));
+    ok('status: an old feeder shows its age, a failed newest run shows red, nothing more', /store · 2d ago/.test(statusHtml(sB)) && /fpill bad[^>]*>[\s\S]*?fleet · 9h ago/.test(statusHtml(sB)));
+    ok('status: unread sync_runs reads unknown, never an age', /fleet · unknown/.test(statusHtml(Object.assign({}, pB, { feeders: null }))));
+    const steps = TILES.find(t => t.id === 'new.steps'), days = TILES.find(t => t.id === 'ret.days');
+    const stepCx = tileCtx(steps, pB), dayCx = tileCtx(days, pB);
+    const f = installFunnel(installsIn(pB.idx, stepCx.days));
+    ok('moved from the strip: the first-launch funnel tile prints every step', f.every(st => strip(steps.view.call(steps, stepCx)).includes(st.label)));
+    const d1 = pooledRetention(pB.idx, dayCx.days, 1);
+    ok('moved from the strip: day 1 return is a tile, with its n', d1.den > 0 && strip(days.view.call(days, dayCx)).includes(rateSub(d1.rate, 'installs')));
+    eq('moved from the strip: the day-1 drill opens exactly the people it counts', days.drill('ret|1', dayCx).rows.length, d1.num);
   }
 
   // ── Q. Copy and structure law ───────────────────────────────────────────
@@ -3834,7 +3549,7 @@ function runSelfTest() {
     ok('copy: the road-to-a-thousand tile is gone', !new RegExp('Road' + ' to 1').test(pageSource) && !/milestoneProgress\(/.test(pageSource.replace(/milestone' \+ 'Progress/g, '')));
     ok('structure: the per-user detail page is no longer linked', !/href="legacy\.html"/.test(staticMarkup));
     ok('structure: tile ids are unique', new Set(TILES.map(t => t.id)).size === TILES.length);
-    ok('structure: the eight sections are in the spec’s order', ['s-today', 's-users', 's-new', 's-ret', 's-use', 's-fb', 's-err', 's-trust'].every((id, i, a) => !i || staticMarkup.indexOf(`id="${a[i - 1]}"`) < staticMarkup.indexOf(`id="${id}"`)));
+    ok('structure: the status line, then the seven sections in the spec’s order', ['s-status', 's-users', 's-new', 's-ret', 's-use', 's-fb', 's-err', 's-trust'].every((id, i, a) => !i || staticMarkup.indexOf(`id="${a[i - 1]}"`) < staticMarkup.indexOf(`id="${id}"`)));
     ok('structure: every tile lives in a section that exists', TILES.every(t => staticMarkup.includes(`id="tiles-${t.section}"`)));
     ok('structure: both themes define every colour token', ['--bg', '--surface', '--text', '--muted', '--act', '--accent', '--heat'].every(k => (pageSource.match(new RegExp(k + ':', 'g')) || []).length >= 2));
   }
