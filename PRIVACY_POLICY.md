@@ -1,6 +1,6 @@
 # Privacy Policy — Axon
 
-*Last updated: October 10, 2026*
+*Last updated: October 11, 2026*
 
 ## Overview
 
@@ -12,7 +12,7 @@ Axon ("the app", "we", "us") is a health app for iPhone that reads Apple Health 
 
 - **Apple HealthKit data** we read: sleep analysis and stages, heart rate and heart rate variability (HRV), resting heart rate, respiratory rate, blood oxygen (SpO₂), wrist temperature, VO₂max, workouts, active energy, steps, walking metrics, time in daylight, and environmental sound levels.
 - **Dietary data from Apple Health** — calories, protein, carbohydrates, fat, fibre and caffeine — read **only if you ask us to**, from the Food tab. Axon does not request access to this data unless you tap that row, and it lets meals you log in another app (one that writes to Apple Health) appear in Axon without re-typing them. These values are read, shown on the Food tab, and nothing else: they are never uploaded, never included in the optional anonymized contribution below, and never sent to our analytics. **Axon writes nothing back to Apple Health**, so your entries in other apps are never changed.
-- **Your calendar — times and counts only, and only if you turn it on** (Profile → Privacy → Calendar). Axon asks for calendar access only when you tap that row. It then keeps, for each day, how many events you had, how many were meetings and how long they lasted, when the first started and the last ended, and whether an event ran past 20:00 or started before 08:00 — so it can show your week beside your scores. **Event titles, locations, notes and the people in them are never stored.** These day summaries stay on this iPhone: they are never uploaded, never included in the optional anonymized contribution below or in anything an AI assistant can read, and never sent to our analytics (which record only whether calendar access is on, never what your calendar holds). Turning it off in Axon deletes the stored days; you can also withdraw access in Settings → Privacy & Security → Calendars.
+- **Your calendar — times and counts only, and only if you turn it on** (Profile → Connections → Calendar). Axon asks for calendar access only when you tap that row. It then keeps, for each day, how many events you had, how many were meetings and how long they lasted, when the first started and the last ended, and whether an event ran past 20:00 or started before 08:00 — so it can show your week beside your scores. **Event titles, locations, notes and the people in them are never stored.** These day summaries stay on this iPhone: they are never uploaded, never included in the optional anonymized contribution below or in anything an AI assistant can read, and never sent to our analytics (which record only whether calendar access is on, never what your calendar holds). Turning it off in Axon deletes the stored days; you can also withdraw access in Settings → Privacy & Security → Calendars.
 - **All four daily scores and every sub-score** — computed and stored on-device.
 - **Daily check-in answers** (mood, energy, stress, meditation minutes).
 - **Journal entries** (never uploaded, anywhere, under any setting).
@@ -50,7 +50,7 @@ We use contributed data solely to improve Axon's scoring models.
 
 ## 3a. Opt-in: Connect Axon to my AI assistant (off by default)
 
-In **Profile → Privacy** there is a switch: **"Connect Axon to my AI assistant."** It is **off by default**, and nothing in this section happens while it is off. It lets an AI assistant you choose (for example Claude or ChatGPT) read your Axon record and, if you allow it, log entries for you.
+In **Profile → Connections** there is a switch: **"Connect Axon to my AI assistant."** It is **off by default**, and nothing in this section happens while it is off. It lets an AI assistant you choose (for example Claude or ChatGPT) read your Axon record and, if you allow it, log entries for you.
 
 - **What leaves your phone when you turn it on:** what Axon shows you, worked out on your phone from the Apple Health data and your own entries listed in section 1 — as daily summaries and the app's own results, never the raw samples. In full:
   - **Scores:** the four daily scores, every sub-score, and the text of each breakdown row the app shows (the reading, its verdict, and the note that explains a missing or partial value), plus which scores are still building a baseline.
