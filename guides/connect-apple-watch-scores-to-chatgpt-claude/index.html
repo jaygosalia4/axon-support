@@ -1,0 +1,91 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect your Apple Watch health scores to ChatGPT or Claude</title>
+<meta name="description" content="Three honest ways to get your Apple Watch sleep, recovery and readiness data into ChatGPT or Claude — a Health export, a pasted summary, or a live connection — and what each one sends where.">
+<link rel="canonical" href="https://jaygosalia4.github.io/axon-support/guides/connect-apple-watch-scores-to-chatgpt-claude/">
+<meta property="og:type" content="article"><meta property="og:title" content="Connect your Apple Watch health scores to ChatGPT or Claude"><meta property="og:description" content="A Health export, a pasted summary, or a live connection — what each one sends where."><meta property="og:url" content="https://jaygosalia4.github.io/axon-support/guides/connect-apple-watch-scores-to-chatgpt-claude/">
+<link rel="stylesheet" href="../../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "Connect your Apple Watch health scores to ChatGPT or Claude",
+      "description": "Three honest ways to get your Apple Watch sleep, recovery and readiness data into ChatGPT or Claude — a Health export, a pasted summary, or a live connection — and what each one sends where.",
+      "datePublished": "2026-10-10",
+      "dateModified": "2026-10-10",
+      "author": { "@type": "Organization", "name": "Axon" },
+      "publisher": { "@type": "Organization", "name": "Axon" },
+      "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/guides/connect-apple-watch-scores-to-chatgpt-claude/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Can ChatGPT or Claude read Apple Health directly?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Not through Apple Health itself. Apple Health shares data with apps on your iPhone that you allow; to get it into a chat assistant you either export it, paste a summary, or use an app that offers a connection you switch on." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it safe to give an assistant my health data?",
+          "acceptedAnswer": { "@type": "Answer", "text": "It depends on what you send and to whom. Whatever the assistant reads is handled under its provider's privacy policy. Send the least that answers your question — a weekly summary is often enough — and prefer a connection you can switch off that deletes its copy." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<header><a class="logo" href="../../"><div class="logo-dot"></div>Axon</a><nav><a href="../">Guides</a><a href="../../#faq">FAQ</a><a href="../../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
+<main>
+<p class="eyebrow">Guides</p>
+<h1>Connect your Apple Watch health scores to ChatGPT or Claude</h1>
+<p class="lede">Your Watch already measures your sleep, heart rate variability and workouts. Asking an assistant "why was this week so rough?" needs that data in the chat — here are the three ways to get it there, and what each one sends where.</p>
+<p class="meta">By the Axon team · Updated 10 October 2026</p>
+<div class="answer"><p><strong>Quick answer.</strong> Apple Health doesn't connect to chat assistants by itself. You can export everything from the Health app (large and raw), paste a short summary into a chat (nothing stored anywhere), or switch on a live connection from an app that reads Health on your iPhone, such as Axon 2.1 (beta), which lets Claude Code or a custom GPT read your scores until you switch it off.</p></div>
+
+<h2>1. Export everything from the Health app</h2>
+<p>The Health app can export all of your data as a file (tap your picture, then Export All Health Data). You can then attach it to a chat. It is complete, but it is raw: years of individual heart-rate and sleep samples in XML, often hundreds of megabytes — more than most chats will take — and it carries no scores, so the assistant has to work out "recovery" from scratch. It is also a one-off snapshot, and a copy of everything goes to the assistant's provider.</p>
+
+<h2>2. Paste a summary into any chat</h2>
+<p>The lightest option: give the assistant only the numbers that answer your question. In Axon, say "Copy my health brief from Axon" to Siri (or run the shortcut) and the last seven days of scores land on your clipboard. Paste them into ChatGPT, Claude or anything else. Nothing is stored by Axon, and the assistant sees only what you pasted.</p>
+
+<h2>3. A live connection you switch on</h2>
+<p>For follow-up questions over weeks, a connection beats pasting. Assistants connect to outside data through the Model Context Protocol (MCP) — which Claude Code supports — or, in ChatGPT, through a custom GPT's Actions, which call a web address described by an OpenAPI document.</p>
+<p>Axon 2.1 offers both, in beta. You switch it on in Profile → Privacy; Axon then keeps a copy of your scores and daily summaries — never raw Health samples, your journal or your calendar — under a random ID, and gives you a key. Your assistant reads with that key: "How did I sleep this week?" gets an answer in Axon's own words, with a missing night marked missing rather than guessed. It can also log a check-in, a meal or a nap for you, if you allow it. Switching the connection off deletes the copy. Step-by-step setup is on <a href="../../ai/">Connect Axon to your AI assistant</a>.</p>
+
+<h2>Which one to choose</h2>
+<ul>
+<li><strong>One question, once:</strong> paste a summary.</li>
+<li><strong>A deep dig into years of raw data:</strong> the Health export, if your assistant can take the file.</li>
+<li><strong>Ongoing questions about sleep, recovery and training:</strong> a connection you can switch off.</li>
+<li><strong>You don't want any copy off your phone:</strong> don't connect. Axon's scores, Siri answers and calendar insights all work on your iPhone alone.</li>
+</ul>
+
+<h2>What an assistant can and can't tell you</h2>
+<p>An assistant is good at spotting patterns you would miss — shorter sleep after late meetings, recovery dipping after back-to-back hard days. It is not a doctor, and these scores are wellness estimates built from your own baselines, not diagnoses. The first week of any baseline is provisional. If something in your data worries you, take it to a clinician, not a chatbot.</p>
+
+<div class="cta"><h2>Your Apple Watch scores, wherever you ask</h2><p>Four daily scores, computed on your iPhone. Shared only when you say so.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-connect-apple-watch-scores-to-chatgpt-claude&mt=8">Get Axon on the App Store</a></div>
+
+<section class="faq" id="faq">
+<div class="faq-item"><p class="faq-q">Can ChatGPT or Claude read Apple Health directly?</p><p class="faq-a">Not through Apple Health itself. Apple Health shares data with apps on your iPhone that you allow; to get it into a chat assistant you either export it, paste a summary, or use an app that offers a connection you switch on.</p></div>
+<div class="faq-item"><p class="faq-q">Is it safe to give an assistant my health data?</p><p class="faq-a">It depends on what you send and to whom. Whatever the assistant reads is handled under its provider's privacy policy. Send the least that answers your question — a weekly summary is often enough — and prefer a connection you can switch off that deletes its copy.</p></div>
+</section>
+
+<div class="related"><h2>Related</h2><ul>
+<li><a href="../../ai/">Connect Axon to your AI assistant (setup)</a></li>
+<li><a href="../readiness-score-explained/">Readiness score explained</a></li>
+<li><a href="../apple-watch-sleep-score-vs-recovery-score/">Apple Watch Sleep Score vs a recovery score</a></li>
+</ul></div>
+
+<div class="sources"><strong>Sources</strong><ol>
+<li>Apple — <a href="https://support.apple.com/guide/iphone/share-your-health-data-iph5ede58c3d/ios" target="_blank">Share your health data on iPhone</a></li>
+<li>Model Context Protocol — <a href="https://modelcontextprotocol.io/" target="_blank">modelcontextprotocol.io</a></li>
+<li>Anthropic — <a href="https://code.claude.com/docs/en/mcp" target="_blank">Connect Claude Code to tools via MCP</a></li>
+<li>OpenAI — <a href="https://platform.openai.com/docs/actions/introduction" target="_blank">GPT Actions</a></li>
+</ol></div>
+</main>
+<footer><span>© 2026 Axon</span><span><a href="../../">Support</a> · <a href="../">Guides</a> · <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">Privacy</a></span></footer>
+</body></html>
