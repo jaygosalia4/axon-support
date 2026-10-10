@@ -14,7 +14,7 @@
       "headline": "Connect Axon to your AI assistant",
       "description": "Let Claude, ChatGPT or any assistant read your Axon scores: the steps, the MCP and OpenAPI addresses, what leaves your iPhone, and how switching it off deletes the copy.",
       "datePublished": "2026-10-10",
-      "dateModified": "2026-10-10",
+      "dateModified": "2026-10-11",
       "author": { "@type": "Organization", "name": "Axon" },
       "publisher": { "@type": "Organization", "name": "Axon" },
       "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/ai/"
@@ -25,7 +25,7 @@
         {
           "@type": "Question",
           "name": "Does my health data leave my iPhone?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Only if you switch the connection on in Profile → Privacy. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy." }
+          "acceptedAnswer": { "@type": "Answer", "text": "Only if you switch the connection on in Profile → Connections. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy." }
         },
         {
           "@type": "Question",
@@ -48,15 +48,15 @@
 <p class="eyebrow">Axon 2.1 · Beta</p>
 <h1>Connect Axon to your AI assistant</h1>
 <p class="lede">Ask Claude, ChatGPT or any assistant about your sleep, recovery and food, and get answers from the scores Axon already computes from your Apple Watch.</p>
-<p class="meta">By the Axon team · Updated 10 October 2026</p>
+<p class="meta">By the Axon team · Updated 11 October 2026</p>
 
 <div class="answer"><p><strong>The promise, in plain words.</strong> Your health data never leaves your phone — unless you say so. Switching this on says so: Axon keeps a copy of your scores and daily summaries so the assistant you choose can read it with your key. Switching it off deletes the copy. Nothing happens until you turn it on.</p></div>
 
 <h2>Before you start</h2>
 <ol>
 <li>Update Axon to 2.1 on your iPhone.</li>
-<li>Open <strong>Profile → Privacy → Connect Axon to my AI assistant</strong> and tap <strong>Turn on</strong>.</li>
-<li>Axon shows your key once. Copy it — it starts with <code>axon_</code>. Lost it? Make a new key on the same page; the old one stops working.</li>
+<li>Open <strong>Profile → Connections → Connect Axon to my AI assistant</strong> and tap <strong>Turn on</strong>.</li>
+<li>Axon shows your key once. Copy it — it starts with <code>axon_</code> — or tap <strong>Copy everything for your assistant</strong> for one message with the key and every address. Lost it? Make a new key on the same page; the old one stops working.</li>
 <li>Pick your assistant below. Axon's own page walks the same steps, with copy buttons.</li>
 </ol>
 
@@ -75,7 +75,14 @@
 <p>GPTs are made on chatgpt.com, not inside the ChatGPT iPhone app; once saved, you can use yours anywhere you use ChatGPT.</p>
 
 <h2>Any assistant</h2>
-<p>Anything that speaks MCP or plain HTTP can connect. Send your key as <code>Authorization: Bearer axon_…</code> on every request.</p>
+<p><strong>One paste.</strong> On the key page (or Any assistant in Axon), tap <strong>Copy everything</strong> and paste it into the assistant's chat. It carries everything an assistant needs to connect on its own:</p>
+<pre><code>Connect to Axon, my health app. It has an API you can read and write through.
+REST address: https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1
+API description (OpenAPI): https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1/openapi.json
+MCP address: https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/mcp
+Authorization: Bearer axon_…
+How it works: https://jaygosalia4.github.io/axon-support/ai/</code></pre>
+<p>Then ask how you slept this week. Anything that speaks MCP or plain HTTP can connect this way. Send your key as <code>Authorization: Bearer axon_…</code> on every request.</p>
 <ul>
 <li><strong>MCP</strong> (streamable HTTP): <code>https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/mcp</code></li>
 <li><strong>REST</strong>: <code>https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1</code> — every tool and its words are listed in the <a href="https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1/openapi.json">OpenAPI document</a>.</li>
@@ -98,7 +105,7 @@
 <p>The full detail is section 3a of the <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">privacy policy</a>.</p>
 
 <h2>Ask Siri <span class="beta">BETA</span></h2>
-<p>Siri and the Shortcuts app answer from Axon on your iPhone — nothing is sent anywhere. The full list is in <strong>Profile → Learn → Ask Axon with Siri</strong>. Say:</p>
+<p>Siri and the Shortcuts app answer from Axon on your iPhone — nothing is sent anywhere. The full list is in <strong>Profile → Connections → Ask Axon with Siri</strong>. Say:</p>
 <ul>
 <li>"How am I doing in Axon" — all four scores and the day's note</li>
 <li>"What is my readiness in Axon" — one score and what drives it</li>
@@ -106,10 +113,10 @@
 <li>"Log my mood in Axon" · "Log a nap in Axon"</li>
 <li>"Copy my health brief from Axon" — the last 7 days, to paste into any chat</li>
 </ul>
-<p><strong>Ask without the app name.</strong> Siri runs a shortcut by its name. In Axon, open <strong>Profile → Learn → Ask Axon with Siri</strong> and tap <strong>Add to Siri</strong> beside a question like "How am I doing today": Axon opens Shortcuts and walks you through three steps, once.</p>
+<p><strong>Ask without the app name.</strong> Siri runs a shortcut by its name. In Axon, open <strong>Profile → Connections → Ask Axon with Siri</strong> and tap <strong>Add to Siri</strong> beside a question like "How am I doing today": Axon opens Shortcuts and walks you through three steps, once.</p>
 
 <h2>Your week beside your body <span class="beta">BETA</span></h2>
-<p>Allow calendar access in <strong>Profile → Privacy → Calendar</strong>, and the Readiness, Recovery and Sleep pages show a <strong>YOUR WEEK</strong> row: your meeting time under each day's score. The <strong>Calendar × body</strong> page shows what the last 30 days show — for example, how sleep compares on days with a late event.</p>
+<p>Allow calendar access in <strong>Profile → Connections → Calendar</strong>, and the Readiness, Recovery and Sleep pages show a <strong>YOUR WEEK</strong> row: your meeting time under each day's score. The <strong>Calendar × body</strong> page shows what the last 30 days show — for example, how sleep compares on days with a late event.</p>
 <p><strong>On this iPhone only.</strong> Axon keeps start and end times and counts — never titles, places or people — and nothing about your calendar leaves your phone, including through the AI connection. Stopping deletes the stored calendar days.</p>
 
 <h2>This is a beta</h2>
@@ -118,7 +125,7 @@
 <div class="cta"><h2>Your Apple Watch scores, wherever you ask</h2><p>Four daily scores, computed on your iPhone. Shared only when you say so.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-ai&mt=8">Get Axon on the App Store</a></div>
 
 <section class="faq" id="faq">
-<div class="faq-item"><p class="faq-q">Does my health data leave my iPhone?</p><p class="faq-a">Only if you switch the connection on in Profile → Privacy. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy.</p></div>
+<div class="faq-item"><p class="faq-q">Does my health data leave my iPhone?</p><p class="faq-a">Only if you switch the connection on in Profile → Connections. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy.</p></div>
 <div class="faq-item"><p class="faq-q">Can my assistant change my data?</p><p class="faq-a">It can ask Axon to log a mood check-in, a meal or a nap, the same entries you make by hand. Each one appears the next time Axon updates on your iPhone. You can switch logging off and keep the connection read only.</p></div>
 <div class="faq-item"><p class="faq-q">What if I lose the key?</p><p class="faq-a">Make a new key on the same page in Axon. The old one stops working at once, and your assistant needs the new one.</p></div>
 </section>
