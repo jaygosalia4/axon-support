@@ -276,13 +276,26 @@
     .lg-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
 
     /* ── Line / area charts (SVG marks, HTML text) ──────────────────────── */
-    .lc { position: relative; padding-left: 34px; }
+    .lc { position: relative; padding-left: 34px; padding-right: 40px; }
     .lc-plot { position: relative; border-bottom: 1px solid var(--rule); }
     .lc-plot svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; }
     .lc-plot svg path { vector-effect: non-scaling-stroke; }
-    .lc-hits { position: absolute; inset: 0; display: flex; }
+    .lc-hits { position: absolute; inset: 0; display: flex; touch-action: pan-y; }
     .lc-hit { flex: 1 1 0; min-width: 0; }
-    .lc-hit:hover { background: var(--wash); }
+    .lc-hit:hover, .lc-hit.sel { background: var(--wash); }
+    /* The readout: the day under the finger or pointer, every series' value. */
+    .lc-ro { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-height: 20px; margin: 0 -40px 6px -34px;
+             font-size: var(--t5); color: var(--muted); }
+    .lc-ro b { color: var(--text); font-weight: 600; }
+    /* End of line: a dot on the last point and its value in the series colour. HTML, so type never scales with the plot. */
+    .lc-end { position: absolute; transform: translateY(-50%); font-size: var(--t5); font-weight: 600; line-height: 12px;
+              white-space: nowrap; pointer-events: none; }
+    .lc-pt { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%);
+             box-shadow: 0 0 0 2px var(--surface); pointer-events: none; }
+    .lc-recent { margin-top: 12px; }
+    table.t.recent th, table.t.recent td { padding-right: 10px; }
+    table.t.recent th:first-child, table.t.recent td:first-child { padding-right: 14px; }
+    table.t th[data-drill]:hover { color: var(--text); }
     .spark { display: block; width: 100%; height: 34px; }
     .spark.sm { height: 16px; width: 56px; }
     .spark path { vector-effect: non-scaling-stroke; }
@@ -305,6 +318,7 @@
     .tri td { text-align: center; padding: 6px 2px; border-radius: 5px; white-space: nowrap; min-width: 38px; }
     .tri td.rl { text-align: left; background: none; color: var(--muted); padding-right: 8px; }
     .tri td.cell-blank { color: var(--dim); }
+    .tri td.cell-partial { font-style: italic; outline: 1px dashed var(--rule); outline-offset: -2px; }
     .tri td[data-drill]:hover { outline: 1px solid var(--accent); }
     .qual { color: var(--dim); font-weight: 400; }
 
@@ -349,6 +363,13 @@
       .k-val { font-size: 22px; }
       .fpills { margin-left: 0; }
       .chart-xlab.odd { visibility: hidden; }
+      /* The last-7-days table must show its newest day without a sideways scroll. */
+      table.t.recent th, table.t.recent td { padding-right: 5px; font-size: var(--t5); }
+      table.t.recent th:first-child, table.t.recent td:first-child { padding-right: 8px; }
+      table.t.recent th:first-child { white-space: normal; min-width: 44px; }
+      table.t.recent th .m { display: block; }   /* "10 / Oct": seven dates fit a phone */
+      .lc { padding-right: 34px; }
+      .lc-ro { margin-right: -34px; }
       nav.secnav { display: none; }
       .pill { padding: 5px 7px; }
       .ms-body { position: fixed; left: 16px; right: 16px; top: 96px; min-width: 0; }
@@ -505,7 +526,7 @@ const T = {
 const MIDNIGHT_FIX_VERSION = '1.9.5';
 // The version live on the App Store — a constant, never max(versions seen),
 // so one TestFlight phone cannot re-label the fleet. Move it at every release.
-const SHIPPED_VERSION = '1.9.9';
+const SHIPPED_VERSION = '2.0';
 
 // ── Fetch caps ────────────────────────────────────────────────────────────
 const FLEET_PAGE      = 1000;
@@ -754,15 +775,20 @@ function fmtDay(day) {
   return `${+d} ${['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m]}`;
 }
 function weekDays(monday) { return Array.from({ length: 7 }, (_, k) => shiftDay(monday, k)); }
-/// Complete Monday–Sunday weeks lying wholly inside `days`, oldest first,
-/// the newest `cap` of them.
-function weeksIn(days, cap) {
+/// Monday–Sunday weeks lying wholly inside `days`, oldest first, the newest
+/// `cap` of them. When `days` ends on `liveDay` (the last complete day) the
+/// week that day sits in counts too, finished or not: a week still in
+/// progress is a PARTIAL row, shown as it stands and never completed.
+function weeksIn(days, cap, liveDay) {
   if (!days || !days.length) return [];
   const first = days[0], last = days[days.length - 1];
   const out = [];
   for (let m = mondayOf(first) < first ? shiftDay(mondayOf(first), 7) : mondayOf(first); shiftDay(m, 6) <= last; m = shiftDay(m, 7)) out.push(m);
+  if (liveDay && last === liveDay && weekIsLive(mondayOf(last), last)) out.push(mondayOf(last));
   return cap ? out.slice(-cap) : out;
 }
+/// A week is "so far" when its Sunday has not yet been a complete day.
+const weekIsLive = (monday, lastDay) => shiftDay(monday, 6) > lastDay;
 
 /// The user's local hour, from the IANA zone the row carried. Intl is the
 /// only thing that gets a DST boundary right. A missing or unparseable zone
@@ -929,7 +955,14 @@ function resolveDays(range, natural, today, earliest) {
   }
   const n = natural || { days: 30 };
   if (n.all) return { days: dayList(allFrom, last), label: `all time, since ${fmtDay(allFrom)}` };
-  if (n.weeks) return { days: completeDays(today, 7 * (n.weeks + 1)), label: `last ${n.weeks} complete weeks`, weeks: n.weeks };
+  if (n.weeks) {
+    // The newest N weeks, ending with the week that holds yesterday. That week
+    // is still in progress unless yesterday was a Sunday, and it is shown as
+    // it stands. Never a fixed day count: a fixed window drops the newest cohort.
+    const newest = mondayOf(last);
+    return { days: dayList(shiftDay(newest, -7 * (n.weeks - 1)), last),
+             label: `latest ${n.weeks} weeks${weekIsLive(newest, last) ? ', the newest so far' : ''}`, weeks: n.weeks };
+  }
   return { days: completeDays(today, n.days), label: `last ${n.days} days` };
 }
 
@@ -1079,9 +1112,20 @@ function uniqueOver(sets, day, span) {
 /// DAU, WAU (7 days ending that day) and MAU (30 days ending that day).
 /// WAU and MAU look back past the window's first day on purpose — a 7-day
 /// view must not show a MAU that is really a 7-day count.
-function activesSeries(idx, days) {
+///
+/// DAU is split into NEW (that day is the person's first day with any event)
+/// and RETURNING (everyone else). `born` is the index that knows first days:
+/// pass the UNFILTERED index so a version or country filter cannot make an
+/// old user look new the first time that slice sees them.
+function activesSeries(idx, days, born) {
   const sets = daySets(idx);
-  return days.map(d => ({ day: d, dau: (sets.get(d) || new Set()).size, wau: uniqueOver(sets, d, 7), mau: uniqueOver(sets, d, 30) }));
+  const first = born || idx;
+  return days.map(d => {
+    const act = sets.get(d) || new Set();
+    let fresh = 0;
+    for (const id of act) { const p = first.persons.get(id); if (p && p.firstSeen === d) fresh++; }
+    return { day: d, dau: act.size, fresh, returning: act.size - fresh, wau: uniqueOver(sets, d, 7), mau: uniqueOver(sets, d, 30) };
+  });
 }
 /// DAU ÷ MAU per day, under the n rule.
 function stickinessSeries(series) {
@@ -1151,6 +1195,11 @@ function whoTheyAre(idx, days) {
 
 // ══ 2. NEW USERS ══════════════════════════════════════════════════════════
 const isFirstTime = r => /^first/i.test(String(r.download_type || ''));
+/// Apple's `source_type` values say where a tap came from, not what it was. A
+/// referrer can be any app (AppRaven, the Reddit app) or any website, so the
+/// page says that. The drill tables keep Apple's own value, word for word.
+const SOURCE_LABELS = { 'App referrer': 'Another app (e.g. AppRaven, Reddit app)', 'Web referrer': 'A website' };
+const sourceLabel = name => SOURCE_LABELS[name] || name;
 function downloadsOn(ascRows, days) {
   if (!ascRows) return null;
   const set = new Set(days);
@@ -1172,7 +1221,7 @@ function downloadsByDaySource(ascRows, days) {
     byDay.set(r.date, byDay.get(r.date) + n);
   }
   const sources = [...bySource.entries()]
-    .map(([name, m]) => ({ name, total: [...m.values()].reduce((a, b) => a + b, 0), byDay: days.map(d => m.get(d)) }))
+    .map(([name, m]) => ({ name, label: sourceLabel(name), total: [...m.values()].reduce((a, b) => a + b, 0), byDay: days.map(d => m.get(d)) }))
     .sort((a, b) => b.total - a.total);
   return { days, sources, byDay: days.map(d => byDay.get(d)), total: sources.reduce((a, s) => a + s.total, 0) };
 }
@@ -1217,6 +1266,14 @@ function funnelByWeek(ascRows, idx, mondays, lastDay) {
     };
   });
 }
+/// The weeks the funnel tile shows: leading weeks with no download and no
+/// first launch are not columns, so "All" starts where the data does.
+function funnelWeeks(cx) {
+  const fw = funnelByWeek(cx.dl, cx.idx, cx.mondays, cx.lastDay);
+  let i = 0;
+  while (i < fw.length && !fw[i].steps[0].n && !fw[i].steps[1].n) i++;
+  return fw.slice(i);
+}
 /// The install funnel over one cohort — steps cumulative-AND (the New users
 /// section's first-launch-to-day-2 tile).
 function installFunnel(cohort) {
@@ -1244,30 +1301,48 @@ function worstFunnelDrop(steps) {
 /// ONE triangle, two populations. Row = a week's members; column k = the
 /// calendar week k weeks later; cell = members active any day that week.
 ///
-/// ⛔ A week that has not finished yet renders BLANK, never 0 — a young
-/// row's zero is our calendar, not their behaviour.
+/// A cell is one of three things, in `state`:
+///   full    that calendar week is over — a share, as always;
+///   partial the week is in progress — the same share over the days already
+///           complete (`days` of 7), shown as it stands, never filled in;
+///   future  not one complete day in that week yet — a dot, never 0.
+/// ⛔ Today is never in a window, so a row's members and every cell count only
+/// days up to `lastDay`.
 function weeklyTriangle(idx, mondays, lastDay, cols, membersOf) {
   return mondays.map(w => {
     const members = membersOf(w);
     const cells = [];
     for (let k = 0; k < cols; k++) {
       const wk = shiftDay(w, 7 * k);
-      if (shiftDay(wk, 6) > lastDay) { cells.push({ k, reached: false, num: 0, den: 0, rate: null, people: [] }); continue; }
-      const wd = weekDays(wk);
+      if (wk > lastDay) { cells.push({ k, state: 'future', reached: false, days: 0, num: 0, den: 0, rate: null, people: [] }); continue; }
+      const wd = weekDays(wk).filter(d => d <= lastDay);
       const people = members.filter(p => wd.some(d => p.activeDays.has(d)));
-      cells.push({ k, reached: true, num: people.length, den: members.length, rate: rate(people.length, members.length), people });
+      cells.push({ k, state: wd.length < 7 ? 'partial' : 'full', reached: true, days: wd.length, num: people.length, den: members.length, rate: rate(people.length, members.length), people });
     }
-    return { week: w, n: members.length, members, cells };
+    const elapsed = weekDays(w).filter(d => d <= lastDay).length;
+    return { week: w, n: members.length, members, days: elapsed, partial: elapsed < 7, cells };
   });
+}
+/// The table starts at the first week with someone in it — leading empty
+/// weeks (before the first install was ever logged) are not rows, and the
+/// columns shrink by as many, so the oldest row stays the widest.
+function trimLeadingEmpty(mondays, membersOf) {
+  let i = 0;
+  while (i < mondays.length && !membersOf(mondays[i]).length) i++;
+  return mondays.slice(i);
 }
 /// (a) Install cohorts — row = the week of their first launch.
 function installTriangle(idx, mondays, lastDay, cols) {
-  return weeklyTriangle(idx, mondays, lastDay, cols, w => idx.cohorted.filter(p => mondayOf(p.firstLaunchDay) === w));
+  const members = w => idx.cohorted.filter(p => p.firstLaunchDay <= lastDay && mondayOf(p.firstLaunchDay) === w);
+  const ms = trimLeadingEmpty(mondays, members);
+  return weeklyTriangle(idx, ms, lastDay, Math.max(0, cols - (mondays.length - ms.length)), members);
 }
 /// (b) Activity cohorts — row = everyone active in that calendar week,
 /// installed then or a year before.
 function activityTriangle(idx, mondays, lastDay, cols) {
-  return weeklyTriangle(idx, mondays, lastDay, cols, w => { const wd = weekDays(w); return idx.list.filter(p => wd.some(d => p.activeDays.has(d))); });
+  const members = w => { const wd = weekDays(w).filter(d => d <= lastDay); return idx.list.filter(p => wd.some(d => p.activeDays.has(d))); };
+  const ms = trimLeadingEmpty(mondays, members);
+  return weeklyTriangle(idx, ms, lastDay, Math.max(0, cols - (mondays.length - ms.length)), members);
 }
 /// Pooled D-N over a window: installs whose day N fell in it, and who of them
 /// was active on exactly day N (the Retention section's day-1 / day-7 tile).
@@ -1301,11 +1376,19 @@ const FEATURE_ITEMS = [
   { key: 'watch',     label: 'Opened the Watch app', def: 'watch_open — at most once per watch-day.', test: r => r.event === 'watch_open' },
   { key: 'notif',     label: 'Tapped a notification', def: 'notif_tap — the kind only.', test: r => r.event === 'notif_tap' },
 ];
-/// For each item and each complete week: people who did it ÷ people active
-/// that week. One pass over the rows.
-function usageByWeek(idx, mondays, items) {
+/// For each item and each week: people who did it ÷ people active that week.
+/// One pass over the rows. With `lastDay`, a week in progress counts only its
+/// complete days (today is never in a window) and `lastDay` is carried so the
+/// grid can mark that week "so far". Leading weeks nobody was active in are
+/// not columns.
+function usageByWeek(idx, mondays, items, lastDay) {
+  let from = 0;
+  const seen = new Set();
+  if (idx) for (const p of idx.list) for (const d of p.activeDays) seen.add(d);
+  while (from < mondays.length && !weekDays(mondays[from]).some(d => seen.has(d) && (!lastDay || d <= lastDay))) from++;
+  mondays = mondays.slice(from);
   const weekOf = new Map();
-  mondays.forEach((w, i) => weekDays(w).forEach(d => weekOf.set(d, i)));
+  mondays.forEach((w, i) => weekDays(w).forEach(d => { if (!lastDay || d <= lastDay) weekOf.set(d, i); }));
   const actives = mondays.map(() => new Set());
   const hit = items.map(() => mondays.map(() => new Set()));
   for (const p of idx.list) for (const r of p.rows) {
@@ -1315,7 +1398,7 @@ function usageByWeek(idx, mondays, items) {
     items.forEach((it, j) => { if (it.test(r)) hit[j][i].add(p.id); });
   }
   return {
-    weeks: mondays,
+    weeks: mondays, lastDay: lastDay || null,
     actives: actives.map(s => s.size),
     items: items.map((it, j) => ({
       key: it.key, label: it.label, def: it.def,
@@ -1776,9 +1859,30 @@ function columnChart(o) {
     <div class="chart-foot">${legend}${o.nNote ? `<span class="n">${escHtml(o.nNote)}</span>` : ''}</div></div>`;
 }
 
+/// The day a viewer last tapped or hovered on each line chart, by tile id, so
+/// a re-render (a drill opening under their finger) leaves the readout where
+/// they put it.
+const LC_SEL = Object.create(null);
+/// Pulls end-of-line labels apart so none sits on another: sorted by y, each
+/// pushed down to `gap` px below the one above (and no higher than `lo`), then
+/// the stack walked back up if it ran past `hi`. Same order out as in.
+function spreadLabels(ys, gap, lo, hi) {
+  const order = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b] || a - b);
+  const out = new Array(ys.length);
+  let prev = -Infinity;
+  for (const i of order) { prev = Math.max(ys[i], lo, prev + gap); out[i] = prev; }
+  let next = Infinity;
+  for (let k = order.length - 1; k >= 0; k--) { const i = order[k]; next = Math.min(out[i], hi, next - gap); out[i] = next; }
+  return out;
+}
 /// Lines (and stacked areas) drawn in SVG — marks only; every word is HTML,
 /// so type never scales with the plot. Points sit at column centres so the
 /// hit strips and the x labels line up with them.
+///
+/// Every line chart carries its numbers (Oct 11 2026): an end-of-line value per
+/// series (`endLabels`, on unless false), a readout line above the plot that
+/// follows the pointer or a tap (`.lc-ro`, filled from each strip's `data-ro`),
+/// and — with `recentDays` — the last N days as a table under the chart.
 function lineChart(o) {
   const h = o.height || 150;
   const labels = o.labels || [];
@@ -1820,24 +1924,55 @@ function lineChart(o) {
       marks += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width || 2}" stroke-linejoin="round" stroke-linecap="round"${s.dash ? ' stroke-dasharray="4 4"' : ''}/>`;
     });
   }
+  const known = (s, i) => s.values[i] !== null && s.values[i] !== undefined;
+  const dayLab = i => (o.xFmt ? o.xFmt(labels[i]) : String(labels[i]));
+  const vTxt = (s, i) => (known(s, i) ? fmt(s.values[i]) : '—');
+  // The readout for one day: the date and every series' value on it. A stacked
+  // chart adds the total. History only — no change, no direction.
+  const readout = i => `<b>${escHtml(dayLab(i))}</b>` + series.map(s => `<span><span class="lg-dot" style="background:${s.color}"></span>${escHtml(s.name)} <b>${escHtml(vTxt(s, i))}</b></span>`).join('')
+    + (o.stacked ? `<span>total <b>${escHtml(fmt(series.reduce((a, s) => a + (s.values[i] || 0), 0)))}</b></span>` : '');
+  const picked = o.tileId ? LC_SEL[o.tileId] : undefined;
+  const sel = picked === undefined ? -1 : labels.indexOf(picked);
   const hits = labels.map((lab, i) => {
     const key = o.drill ? o.drill(i) : null;
-    const tip = (o.xFmt ? o.xFmt(lab) : lab) + ': ' + series.map(s => `${s.name} ${s.values[i] === null || s.values[i] === undefined ? '—' : fmt(s.values[i])}`).join(' · ');
-    return `<div class="lc-hit"${drillAttr(o.tileId, key, tip)}></div>`;
+    const name = key === null ? '' : ` aria-label="${escHtml(dayLab(i) + ': ' + series.map(s => `${s.name} ${vTxt(s, i)}`).join(' · '))}"`;
+    return `<div class="lc-hit${i === sel ? ' sel' : ''}" data-lab="${escHtml(lab)}" data-ro="${escHtml(readout(i))}"${drillAttr(o.tileId, key, null)}${name}></div>`;
   }).join('');
   const xs = xLabels(labels, o);
-  const lastVal = s => { for (let i = n - 1; i >= 0; i--) if (s.values[i] !== null && s.values[i] !== undefined) return s.values[i]; return null; };
+  const lastIdx = s => { for (let i = n - 1; i >= 0; i--) if (known(s, i)) return i; return -1; };
+  const lastVal = s => { const i = lastIdx(s); return i < 0 ? null : s.values[i]; };
   const legend = series.map(s => `<span><span class="lg-dot" style="background:${s.color}"></span>${escHtml(s.name)}${o.stacked ? '' : ` <b>${escHtml(lastVal(s) === null ? '—' : fmt(lastVal(s)))}</b>`}</span>`).join('');
+  // End of line: every series prints its last value beside its last point, in
+  // its own colour, pulled apart vertically where two would sit on each other.
+  let ends = '';
+  if (!o.stacked && o.endLabels !== false) {
+    const pts = series.map(s => { const i = lastIdx(s); return i < 0 ? null : { s, i, v: s.values[i], y: y(s.values[i]) }; }).filter(Boolean);
+    const tops = spreadLabels(pts.map(p => p.y), 12, 6, h - 6);
+    ends = pts.map((p, k) => {
+      const left = ((x(p.i) / W) * 100).toFixed(2);
+      return `<span class="lc-pt" style="left:${left}%;top:${p.y.toFixed(1)}px;background:${p.s.color}"></span>`
+        + `<span class="lc-end" style="left:calc(${left}% + 7px);top:${tops[k].toFixed(1)}px;color:${p.s.color}">${escHtml(fmt(p.v))}</span>`;
+    }).join('');
+  }
+  // The last `recentDays` days as numbers: dates as columns, one row per series.
+  let recent = '';
+  if (o.recentDays && !o.stacked) {
+    const m = Math.min(o.recentDays, n);
+    const cols = Array.from({ length: m }, (_, k) => n - m + k);
+    recent = `<div class="tbl-wrap lc-recent"><table class="t recent"><thead><tr><th>Last ${m} days</th>${cols.map(i => { const lab = dayLab(i), sp = lab.indexOf(' '); return `<th class="num"${drillAttr(o.tileId, o.drill ? o.drill(i) : null, null)}>${sp < 0 ? escHtml(lab) : escHtml(lab.slice(0, sp)) + '<span class="m">' + escHtml(lab.slice(sp)) + '</span>'}</th>`; }).join('')}</tr></thead>
+      <tbody>${series.map(s => `<tr><td><span class="lg-dot" style="background:${s.color}"></span>${escHtml(s.name)}</td>${cols.map(i => `<td class="num">${escHtml(vTxt(s, i))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
   return `<div class="lc">
+    <div class="lc-ro">${readout(sel >= 0 ? sel : n - 1)}</div>
     <div class="lc-plot" style="height:${h}px">
       <div class="chart-grid" style="top:8px"></div>
       <div class="chart-ylab" style="top:8px">${escHtml(fmt(max))}</div>
       <div class="chart-ylab" style="top:${h}px">0</div>
       <svg viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>
-      <div class="lc-hits">${hits}</div>
+      <div class="lc-hits">${hits}</div>${ends}
     </div>
     <div class="chart-x">${xs}</div>
-    <div class="chart-foot">${legend}${o.nNote ? `<span class="n">${escHtml(o.nNote)}</span>` : ''}</div></div>`;
+    <div class="chart-foot">${legend}${o.nNote ? `<span class="n">${escHtml(o.nNote)}</span>` : ''}</div></div>${recent}`;
 }
 function sparkline(values, color, cls) {
   const vals = values.map(v => (v === null || v === undefined || !Number.isFinite(v)) ? null : v);
@@ -1880,22 +2015,25 @@ function triangleCellText(c) {
   return c.rate.directional ? `${c.num}/${c.den}` : `${Math.round(c.rate.pct)}%`;
 }
 function triangleHtml(tri, tileId, rowLabel) {
-  if (!tri.length) return emptyHtml('No complete week inside this range yet.');
+  if (!tri.length) return emptyHtml('No week in this range has anyone in it yet.');
   const cols = tri[0].cells.length;
   const head = `<tr><th class="rl">${escHtml(rowLabel)}</th><th>n</th>${Array.from({ length: cols }, (_, k) => `<th>${k === 0 ? 'Wk 0' : '+' + k}</th>`).join('')}</tr>`;
   const body = [...tri].reverse().map(r => {
     const cells = r.cells.map(c => {
-      if (!c.reached) return `<td class="cell-blank" title="That week has not finished yet">·</td>`;
+      if (!c.reached) return `<td class="cell-blank" title="That week has no finished day yet">·</td>`;
       if (!c.den) return `<td class="cell-blank" title="Nobody in this row">—</td>`;
       const a = 0.08 + 0.72 * Math.min(1, c.rate.pct / 100);
       const ink = a > 0.55 ? 'var(--on-accent)' : 'var(--text)';
-      const tip = `${fmtDay(r.week)} +${c.k} wk: ${c.num} of ${c.den} active` + (c.rate.directional ? ' — directional, under 20' : '');
-      return `<td style="background:rgba(var(--heat),${a.toFixed(2)});color:${ink}"${c.num ? drillAttr(tileId, `${r.week}|${c.k}`, tip) : ` title="${escHtml(tip)}"`}>${escHtml(triangleCellText(c))}</td>`;
+      const part = c.state === 'partial';
+      const tip = `${fmtDay(r.week)} +${c.k} wk${part ? `, week so far (${c.days} of 7 days)` : ''}: ${c.num} of ${c.den} active` + (c.rate.directional ? ' — directional, under 20' : '');
+      return `<td${part ? ' class="cell-partial"' : ''} style="background:rgba(var(--heat),${a.toFixed(2)});color:${ink}"${c.num ? drillAttr(tileId, `${r.week}|${c.k}`, tip) : ` title="${escHtml(tip)}"`}>${escHtml(triangleCellText(c))}</td>`;
     }).join('');
-    return `<tr><td class="rl"${r.n ? drillAttr(tileId, `${r.week}|m`, `Everyone in this row — ${r.n} people`) : ''}>${escHtml(fmtDay(r.week))}</td><td class="dim">${r.n}</td>${cells}</tr>`;
+    const rowTip = `Everyone in this row — ${r.n} people` + (r.partial ? `; the week so far, ${r.days} of 7 days` : '');
+    return `<tr><td class="rl"${r.n ? drillAttr(tileId, `${r.week}|m`, rowTip) : ''}>${escHtml(fmtDay(r.week))}${r.partial ? ' <span class="qual">so far</span>' : ''}</td><td class="dim">${r.n}</td>${cells}</tr>`;
   }).join('');
+  const live = tri.some(r => r.partial || r.cells.some(c => c.state === 'partial'));
   return `<div class="tbl-wrap"><table class="tri"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-    <div class="gap-note">Newest week on top. A dot = that week has not finished. a/b = under 20 people, directional. Click a week for the whole row, a cell for who was still there.</div>`;
+    <div class="gap-note">Newest week on top. A dot = that week has no finished day yet. ${live ? 'Italic with a dashed edge = the week so far: only the days already over, nothing filled in. ' : ''}a/b = under 20 people, directional. Click a week for the whole row, a cell for who was still there.</div>`;
 }
 
 /// A sortable table. `cols` = [{key, label, num, fmt}], rows are plain
@@ -1970,8 +2108,9 @@ const peopleOnDay = (idx, d) => idx.list.filter(p => p.activeDays.has(d));
 const pctFmt = v => (v === null || v === undefined) ? '—' : `${Math.round(v)}%`;
 
 function usageGrid(u, tileId) {
-  if (!u.weeks.length) return emptyHtml('No complete week inside this range yet.');
-  const head = `<tr><th>${escHtml(tileId === 'use.screens' ? 'Screen' : 'Feature')}</th>${u.weeks.map(w => `<th class="num" title="Week of ${escHtml(fmtDay(w))}">${escHtml(fmtDay(w))}</th>`).join('')}<th>Trend</th></tr>`;
+  if (!u.weeks.length) return emptyHtml('No week in this range has anyone active yet.');
+  const live = w => !!u.lastDay && weekIsLive(w, u.lastDay);
+  const head = `<tr><th>${escHtml(tileId === 'use.screens' ? 'Screen' : 'Feature')}</th>${u.weeks.map(w => `<th class="num" title="Week of ${escHtml(fmtDay(w))}${live(w) ? ', the week so far' : ''}">${escHtml(fmtDay(w))}${live(w) ? ' <span class="qual">so far</span>' : ''}</th>`).join('')}<th>Trend</th></tr>`;
   const rows = u.items.map(it => `<tr><td title="${escHtml(it.def || '')}">${escHtml(it.label)}</td>${it.weeks.map((c, i) => {
       const txt = c.rate.known ? (c.rate.directional ? `${c.num}/${c.den}` : `${Math.round(c.rate.pct)}%`) : '—';
       const tip = `${it.label}, week of ${fmtDay(c.week)}: ${c.num} of ${c.den} weekly actives` + (c.rate.directional ? ' — directional' : '');
@@ -1979,11 +2118,11 @@ function usageGrid(u, tileId) {
     }).join('')}<td>${sparkline(it.weeks.map(c => c.rate.known ? c.rate.pct : null), 'var(--s2c)', 'sm')}</td></tr>`).join('');
   const foot = `<tr><td class="dim">Weekly actives</td>${u.actives.map(n => `<td class="num dim">${n}</td>`).join('')}<td></td></tr>`;
   return `<div class="tbl-wrap"><table class="t"><thead>${head}</thead><tbody>${rows}${foot}</tbody></table></div>
-    <div class="gap-note">Columns are weeks, Monday to Sunday. a/b = under 20 actives, directional.</div>`;
+    <div class="gap-note">Columns are weeks, Monday to Sunday${u.lastDay && u.weeks.some(live) ? '; the newest counts only the days already over' : ''}. a/b = under 20 actives, directional.</div>`;
 }
 function usageTable(u) {
   return {
-    cols: [{ key: 'label', label: 'Item' }, ...u.weeks.map((w, i) => ({ key: 'w' + i, label: 'wk of ' + fmtDay(w), num: true, fmt: pctFmt })), { key: 'people', label: 'People, last week', num: true }],
+    cols: [{ key: 'label', label: 'Item' }, ...u.weeks.map((w, i) => ({ key: 'w' + i, label: 'wk of ' + fmtDay(w) + (u.lastDay && weekIsLive(w, u.lastDay) ? ' (so far)' : ''), num: true, fmt: pctFmt })), { key: 'people', label: 'People, newest week', num: true }],
     rows: u.items.map(it => Object.assign({ label: it.label, people: it.weeks.length ? it.weeks[it.weeks.length - 1].num : 0 },
       ...it.weeks.map((c, i) => ({ ['w' + i]: c.rate.known ? c.rate.pct : null })))),
   };
@@ -2000,22 +2139,29 @@ const TILES = [
   // ── 1. USERS ──────────────────────────────────────────────────────────
   {
     id: 'users.actives', section: 'users', wide: true, title: 'Daily, weekly and monthly actives',
-    def: 'Distinct people with any event. WAU and MAU are the 7 and 30 days ending on each day. Complete IST days only.',
+    def: 'Distinct people with any event. WAU and MAU: the 7 and 30 days ending each day. New = that day is a person’s first with any event. Complete IST days.',
     natural: { days: 90 }, filters: BOTH,
     view(cx) {
       const u = needIdx(cx); if (u) return u;
-      const s = activesSeries(cx.idx, cx.days);
-      const last = s[s.length - 1] || { dau: null, wau: null, mau: null, day: null };
-      return `<div class="kpis">${kpi('DAU', fmtInt(last.dau), last.day ? fmtDay(last.day) : '')}${kpi('WAU', fmtInt(last.wau), '7 days to ' + fmtDay(last.day))}${kpi('MAU', fmtInt(last.mau), '30 days to ' + fmtDay(last.day))}${kpi('Active in range', fmtInt(personsActiveIn(cx.idx, cx.days).size), cx.label)}</div>`
+      const s = activesSeries(cx.idx, cx.days, cx.idxAll);
+      const last = s[s.length - 1] || { dau: null, wau: null, mau: null, day: null, fresh: null, returning: null };
+      return `<div class="kpis">${kpi('DAU', fmtInt(last.dau), last.day ? `${fmtDay(last.day)} · ${last.fresh} new · ${last.returning} returning` : '')}${kpi('WAU', fmtInt(last.wau), '7 days to ' + fmtDay(last.day))}${kpi('MAU', fmtInt(last.mau), '30 days to ' + fmtDay(last.day))}${kpi('Active in range', fmtInt(personsActiveIn(cx.idx, cx.days).size), cx.label)}</div>`
         + lineChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, height: 160,
             series: [{ name: 'DAU', color: SERIES[0], values: s.map(x => x.dau) },
                      { name: 'WAU', color: SERIES[1], values: s.map(x => x.wau) },
                      { name: 'MAU', color: SERIES[2], values: s.map(x => x.mau) }],
+            endLabels: true, recentDays: 7,
+            drill: i => s[i].dau ? dayKey(cx.days[i]) : null })
+        + `<div class="mini-h" style="margin-top:16px">Daily actives, new and returning</div>`
+        + lineChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, height: 90, stacked: true, maxTicks: 6,
+            series: [{ name: 'Returning', color: SERIES[0], values: s.map(x => x.returning) },
+                     { name: 'New', color: SERIES[3], values: s.map(x => x.fresh) }],
+            nNote: 'new = the first day a person has any event',
             drill: i => s[i].dau ? dayKey(cx.days[i]) : null });
     },
     table(cx) {
-      return { cols: [{ key: 'day', label: 'Day', fmt: fmtDay }, { key: 'dau', label: 'DAU', num: true }, { key: 'wau', label: 'WAU', num: true }, { key: 'mau', label: 'MAU', num: true }],
-               rows: activesSeries(cx.idx, cx.days).map(x => ({ ...x, _drill: dayKey(x.day) })) };
+      return { cols: [{ key: 'day', label: 'Day', fmt: fmtDay }, { key: 'dau', label: 'DAU', num: true }, { key: 'fresh', label: 'New', num: true }, { key: 'returning', label: 'Returning', num: true }, { key: 'wau', label: 'WAU', num: true }, { key: 'mau', label: 'MAU', num: true }],
+               rows: activesSeries(cx.idx, cx.days, cx.idxAll).map(x => ({ ...x, _drill: dayKey(x.day) })) };
     },
     drill(key, cx) { const [, d] = splitKey(key); const ppl = peopleOnDay(cx.idx, d); return peopleTable(ppl, `Active on ${fmtDay(d)} · ${ppl.length} people`); },
   },
@@ -2032,7 +2178,7 @@ const TILES = [
       return `<div class="kpis">${kpi('Last day', last ? rateVal(last.rate, true) : '<span class="dash">—</span>', last ? `${last.dau} of ${last.mau} · ${fmtDay(last.day)}` : '')}${kpi('Range average', avg === null ? '<span class="dash">—</span>' : Math.round(avg) + '%', avg === null ? 'no day with MAU ≥ 20' : `${known.length} days with MAU ≥ 20`, null, true)}</div>`
         + lineChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, height: 90, maxTicks: 6, yFmt: v => Math.round(v) + '%',
             series: [{ name: 'DAU ÷ MAU', color: SERIES[0], values: s.map(x => x.rate.known && !x.rate.directional ? x.rate.pct : null) }],
-            nNote: 'days with MAU under 20 are left blank',
+            nNote: 'days with MAU under 20 are left blank', endLabels: true, recentDays: 7,
             drill: i => s[i].dau ? dayKey(cx.days[i]) : null });
     },
     table(cx) {
@@ -2104,16 +2250,16 @@ const TILES = [
       const s = downloadsByDaySource(cx.dl, cx.days);
       const wk = weeklyTotals(cx.days, s.byDay);
       const top = s.sources[0];
-      return `<div class="kpis">${kpi('Downloads', fmtInt(s.total), cx.label)}${kpi('Top source', top ? escHtml(top.name) : '<span class="dash">—</span>', top && s.total ? `${Math.round((top.total / s.total) * 100)}% of downloads` : '', null, true)}</div>`
+      return `<div class="kpis">${kpi('Downloads', fmtInt(s.total), cx.label)}${kpi('Top source', top ? escHtml(top.label) : '<span class="dash">—</span>', top && s.total ? `${Math.round((top.total / s.total) * 100)}% of downloads` : '', null, true)}</div>`
         + columnChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, stacked: true, height: 130,
-            series: s.sources.map((src, i) => ({ name: src.name, color: SERIES[i % SERIES.length], values: src.byDay })),
+            series: s.sources.map((src, i) => ({ name: src.label, color: SERIES[i % SERIES.length], values: src.byDay })),
             drill: i => s.byDay[i] ? dayKey(cx.days[i]) : null })
         + `<div class="tbl-wrap" style="margin-top:12px"><table class="t"><thead><tr><th>Week of</th>${wk.map(w => `<th class="num">${escHtml(fmtDay(w.week))}${w.days < 7 ? ` <span class="qual">(${w.days}d)</span>` : ''}</th>`).join('')}</tr></thead>
            <tbody><tr><td class="dim">Downloads</td>${wk.map(w => `<td class="num">${fmtInt(w.total)}</td>`).join('')}</tr></tbody></table></div>`;
     },
     table(cx) {
       const s = downloadsByDaySource(cx.dl, cx.days);
-      return { cols: [{ key: 'day', label: 'Day', fmt: fmtDay }, { key: 'total', label: 'Total', num: true }, ...s.sources.map((x, i) => ({ key: 's' + i, label: x.name, num: true }))],
+      return { cols: [{ key: 'day', label: 'Day', fmt: fmtDay }, { key: 'total', label: 'Total', num: true }, ...s.sources.map((x, i) => ({ key: 's' + i, label: x.label, num: true }))],
                rows: cx.days.map((day, j) => Object.assign({ day, total: s.byDay[j], _drill: dayKey(day) }, ...s.sources.map((x, i) => ({ ['s' + i]: x.byDay[j] })))) };
     },
     drill(key, cx) {
@@ -2121,7 +2267,7 @@ const TILES = [
       const rows = (cx.dl || []).filter(r => isFirstTime(r) && r.date === d)
         .map(r => ({ source: r.source_type || '—', territory: r.territory || '—', version: r.app_version || '—', device: r.device || '—', n: Number(r.counts) || 0 }));
       return { title: `App Store rows · ${fmtDay(d)} · ${rows.reduce((a, r) => a + r.n, 0)} downloads`,
-               cols: [{ key: 'source', label: 'Source' }, { key: 'territory', label: 'Territory' }, { key: 'version', label: 'Version' }, { key: 'device', label: 'Device' }, { key: 'n', label: 'Downloads', num: true }],
+               cols: [{ key: 'source', label: 'Source, as Apple names it' }, { key: 'territory', label: 'Territory' }, { key: 'version', label: 'Version' }, { key: 'device', label: 'Device' }, { key: 'n', label: 'Downloads', num: true }],
                rows, empty: 'No first-time downloads that day.' };
     },
   },
@@ -2131,10 +2277,10 @@ const TILES = [
     natural: { weeks: 6 }, maxWeeks: 10, filters: BOTH,
     view(cx) {
       const u = needIdx(cx); if (u) return u;
-      const fw = funnelByWeek(cx.dl, cx.idx, cx.mondays, cx.lastDay);
-      if (!fw.length) return emptyHtml('No complete week inside this range yet.');
+      const fw = funnelWeeks(cx);
+      if (!fw.length) return emptyHtml('No week in this range has a download or an install in it yet.');
       const steps = fw[0].steps;
-      const head = `<tr><th>Step</th>${fw.map(w => `<th class="num">wk of ${escHtml(fmtDay(w.week))}</th>`).join('')}</tr>`;
+      const head = `<tr><th>Step</th>${fw.map(w => `<th class="num"${w.days < 7 ? ` title="The week so far, ${w.days} of 7 days"` : ''}>wk of ${escHtml(fmtDay(w.week))}${w.days < 7 ? ' <span class="qual">so far</span>' : ''}</th>`).join('')}</tr>`;
       const body = steps.map((s, si) => `<tr><td>${escHtml(s.label)}</td>${fw.map(w => {
         const st = w.steps[si];
         if (st.key === 'dl') {
@@ -2146,12 +2292,12 @@ const TILES = [
         return `<td class="num"${st.n ? drillAttr(this.id, `${w.week}|${st.key}`, tip) : ` title="${escHtml(tip)}"`}><b>${st.n}</b>${sub}</td>`;
       }).join('')}</tr>`).join('');
       return `<div class="tbl-wrap"><table class="t"><thead>${head}</thead><tbody>${body}</tbody></table></div>
-        <div class="gap-note">Downloads join the rest by week, not by person — no system can join them. Percentages are of the people who opened the app; “of n” = under 20, directional.</div>`;
+        <div class="gap-note">Downloads join the rest by week, not by person — no system can join them. Percentages are of the people who opened the app; “of n” = under 20, directional.${fw.some(w => w.days < 7) ? ' The newest week counts only the days already over.' : ''}</div>`;
     },
     table(cx) {
-      const fw = funnelByWeek(cx.dl, cx.idx, cx.mondays, cx.lastDay);
-      return { cols: [{ key: 'week', label: 'Week of', fmt: fmtDay }, { key: 'dl', label: 'Downloaded', num: true }, { key: 'launch', label: 'Opened', num: true }, { key: 'health', label: 'Granted Health', num: true }, { key: 'score', label: 'First score', num: true }, { key: 'day2', label: 'Back day 2', num: true }, { key: 'elig', label: 'Day 2 finished', num: true }],
-               rows: fw.map(w => ({ week: w.week, dl: w.steps[0].n, launch: w.steps[1].n, health: w.steps[2].n, score: w.steps[3].n, day2: w.steps[4].n, elig: w.steps[4].eligible, _drill: `${w.week}|launch` })) };
+      const fw = funnelWeeks(cx);
+      return { cols: [{ key: 'week', label: 'Week of', fmt: (v, r) => fmtDay(v) + (r.days < 7 ? ' (so far)' : '') }, { key: 'dl', label: 'Downloaded', num: true }, { key: 'launch', label: 'Opened', num: true }, { key: 'health', label: 'Granted Health', num: true }, { key: 'score', label: 'First score', num: true }, { key: 'day2', label: 'Back day 2', num: true }, { key: 'elig', label: 'Day 2 finished', num: true }],
+               rows: fw.map(w => ({ week: w.week, days: w.days, dl: w.steps[0].n, launch: w.steps[1].n, health: w.steps[2].n, score: w.steps[3].n, day2: w.steps[4].n, elig: w.steps[4].eligible, _drill: `${w.week}|launch` })) };
     },
     drill(key, cx) {
       const [w, step] = splitKey(key);
@@ -2237,17 +2383,17 @@ const TILES = [
     id: 'use.screens', section: 'use', title: 'Screens',
     def: 'People who opened each tab (tab_viewed) ÷ people active that week.',
     natural: { weeks: 4 }, maxWeeks: 12, filters: BOTH,
-    view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx)), this.id); },
-    table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx))); },
-    drill(key, cx) { return usageDrill(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx)), key, cx); },
+    view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx), cx.lastDay), this.id); },
+    table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx), cx.lastDay)); },
+    drill(key, cx) { return usageDrill(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx), cx.lastDay), key, cx); },
   },
   {
     id: 'use.features', section: 'use', title: 'Features',
     def: 'People who used each feature ÷ people active that week. Widget is a daily device reading, not a tap.',
     natural: { weeks: 4 }, maxWeeks: 12, filters: BOTH,
-    view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS), this.id); },
-    table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS)); },
-    drill(key, cx) { return usageDrill(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS), key, cx); },
+    view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), this.id); },
+    table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay)); },
+    drill(key, cx) { return usageDrill(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), key, cx); },
   },
   {
     id: 'use.notifs', section: 'use', title: 'Notification taps, by kind',
@@ -2491,8 +2637,8 @@ const TILES = [
 ];
 function triangleTable(tri) {
   const cols = tri.length ? tri[0].cells.length : 0;
-  return { cols: [{ key: 'week', label: 'Week of', fmt: fmtDay }, { key: 'n', label: 'n', num: true }, ...Array.from({ length: cols }, (_, k) => ({ key: 'k' + k, label: k ? '+' + k : 'Wk 0', num: true, fmt: pctFmt }))],
-           rows: tri.map(r => Object.assign({ week: r.week, n: r.n, _drill: `${r.week}|0` }, ...r.cells.map(c => ({ ['k' + c.k]: c.reached && c.den ? c.rate.pct : null })))) };
+  return { cols: [{ key: 'week', label: 'Week of', fmt: (v, r) => fmtDay(v) + (r.live ? ' (so far)' : '') }, { key: 'n', label: 'n', num: true }, ...Array.from({ length: cols }, (_, k) => ({ key: 'k' + k, label: k ? '+' + k : 'Wk 0', num: true, fmt: pctFmt }))],
+           rows: tri.map(r => Object.assign({ week: r.week, live: r.partial, n: r.n, _drill: `${r.week}|0` }, ...r.cells.map(c => ({ ['k' + c.k]: c.reached && c.den ? c.rate.pct : null })))) };
 }
 function triangleDrill(tri, key, verb) {
   const [w, k] = splitKey(key);
@@ -2500,7 +2646,7 @@ function triangleDrill(tri, key, verb) {
   if (row && k === 'm') return peopleTable(row.members, `${verb === 'installed' ? 'Installed' : 'Active'} week of ${fmtDay(w)} · all ${row.n}`);
   const c = row && row.cells[Number(k)];
   if (!c) return peopleTable([], 'Nothing here');
-  return peopleTable(c.people, `${verb === 'installed' ? 'Installed' : 'Active'} week of ${fmtDay(w)} · still active ${c.k ? '+' + c.k + ' wk' : 'that week'} · ${c.num} of ${c.den}`);
+  return peopleTable(c.people, `${verb === 'installed' ? 'Installed' : 'Active'} week of ${fmtDay(w)} · still active ${c.k ? '+' + c.k + ' wk' : 'that week'}${c.state === 'partial' ? ` (week so far, ${c.days} of 7 days)` : ''} · ${c.num} of ${c.den}`);
 }
 
 /* ── State: filters, per-tile UI, caches ───────────────────────────────── */
@@ -2541,8 +2687,16 @@ function tileCtx(t, B, override) {
     cx.days = r.days; cx.label = r.label;
     cx.lastDay = r.days.length ? r.days[r.days.length - 1] : lastCompleteDay(B.today);
     if (t.natural.weeks) {
-      cx.mondays = weeksIn(r.days, range.kind === 'default' ? t.natural.weeks : (t.maxWeeks || 12));
-      if (range.kind !== 'default') cx.label = `${r.label} · ${cx.mondays.length} complete ${cx.mondays.length === 1 ? 'week' : 'weeks'}`;
+      // Weeks count back from the one holding yesterday, which may still be in
+      // progress (a partial row). "All" starts on the Monday of the first day
+      // any source knows and is never capped; a fixed day window used to hide
+      // the newest cohort.
+      const live = lastCompleteDay(B.today);
+      const all = range.kind === 'all';
+      const wdays = all && r.days.length ? dayList(mondayOf(r.days[0]), r.days[r.days.length - 1]) : r.days;
+      cx.mondays = weeksIn(wdays, range.kind === 'default' ? t.natural.weeks : all ? null : (t.maxWeeks || 12), live);
+      const so = cx.mondays.length && weekIsLive(cx.mondays[cx.mondays.length - 1], cx.lastDay);
+      if (range.kind !== 'default') cx.label = `${r.label} · ${cx.mondays.length} ${cx.mondays.length === 1 ? 'week' : 'weeks'}${so ? ', the newest so far' : ''}`;
     }
   }
   return cx;
@@ -2788,6 +2942,56 @@ function onClick(ev) {
     const u = uiOf(host.dataset.tile);
     if (!u.open) { u.open = true; rerenderTile(host.dataset.tile); }
   }
+}
+/// The line-chart readout. A strip under the pointer (or a finger, or keyboard
+/// focus) writes its day into the line above the plot. `keep` makes it stick —
+/// a tap, a press, a drag, a focus — and remembers the day by tile so a
+/// re-render keeps it; a bare mouse hover only previews and puts it back.
+function lcHitAt(ev) {
+  const box = ev.target && ev.target.closest ? ev.target.closest('.lc-hits') : null;
+  if (!box || !box.children.length) return null;
+  const r = box.getBoundingClientRect();
+  if (!r.width) return null;
+  const i = Math.floor(((ev.clientX - r.left) / r.width) * box.children.length);
+  return box.children[Math.max(0, Math.min(box.children.length - 1, i))];
+}
+function lcShow(hit, keep) {
+  const lc = hit && hit.closest ? hit.closest('.lc') : null;
+  const ro = lc && lc.querySelector('.lc-ro');
+  if (!ro) return;
+  ro.innerHTML = hit.dataset.ro || '';
+  if (!keep) return;
+  // A tile can hold two charts over the same days: the pick lands on both.
+  const tile = lc.closest('[data-tile]');
+  (tile || lc.parentNode || lc).querySelectorAll('.lc').forEach(c => {
+    const twin = [...c.querySelectorAll('.lc-hit')].find(h => h.dataset.lab === hit.dataset.lab);
+    c.querySelectorAll('.lc-hit.sel').forEach(h => h.classList.remove('sel'));
+    if (!twin) return;
+    twin.classList.add('sel');
+    const r = c.querySelector('.lc-ro');
+    if (r) r.innerHTML = twin.dataset.ro || '';
+  });
+  if (tile) LC_SEL[tile.dataset.tile] = hit.dataset.lab;
+}
+function lcRest(lc) {
+  if (!lc) return;
+  const hits = lc.querySelectorAll('.lc-hit');
+  const keep = lc.querySelector('.lc-hit.sel') || hits[hits.length - 1];
+  if (keep) lcShow(keep, false);
+}
+function onPointer(ev) {
+  const hit = lcHitAt(ev);
+  if (!hit) return;
+  lcShow(hit, ev.type === 'pointerdown' || (ev.type === 'pointermove' && ev.buttons > 0));
+}
+function onPointerOut(ev) {
+  const box = ev.target && ev.target.closest ? ev.target.closest('.lc-hits') : null;
+  if (!box || ev.pointerType !== 'mouse' || (ev.relatedTarget && box.contains(ev.relatedTarget))) return;
+  lcRest(box.closest('.lc'));
+}
+function onFocusIn(ev) {
+  const hit = ev.target && ev.target.closest ? ev.target.closest('.lc-hit') : null;
+  if (hit) lcShow(hit, true);
 }
 function onChange(ev) {
   const t = ev.target;
@@ -3098,7 +3302,8 @@ function runSelfTest() {
     const rd = resolveDays({ kind: 'default' }, { days: 90 }, TODAY, '2026-07-05');
     eq('range: Default hands the tile its own window', rd.days.length, 90);
     const rw = resolveDays({ kind: 'default' }, { weeks: 8 }, TODAY, '2026-07-05');
-    eq('range: a weekly tile on Default gets enough days for its weeks', weeksIn(rw.days, 8).length, 8);
+    eq('range: a weekly tile on Default is the latest 8 weeks, the last one holding yesterday',
+       weeksIn(rw.days, 8, lastCompleteDay(TODAY)), ['2026-07-27', '2026-08-03', '2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14']);
     const ra = resolveDays({ kind: 'all' }, { days: 30 }, TODAY, '2026-07-05');
     eq('range: All starts at the first day any source knows', ra.days[0], '2026-07-05');
     eq('range: All still ends yesterday', ra.days[ra.days.length - 1], '2026-09-18');
@@ -3434,7 +3639,7 @@ function runSelfTest() {
     eq('filter: rows are kept by the version they were SENT from', filterFleet([fe('a', '2026-09-18', 'x', null, { v: '1.9.5' }), fe('a', '2026-09-18', 'x', null, { v: '1.9.6' })], { versions: ['1.9.6'], countries: [] }).length, 1);
     eq('filter: rows are kept by country', filterFleet([fe('a', '2026-09-18', 'x', null, { country: 'US' }), fe('b', '2026-09-18', 'x')], { versions: [], countries: ['US'] }).length, 1);
 
-    const demoToday = todayIST();
+    const demoToday = TODAY;   // pinned with NOW: the demo's clock must not follow the calendar
     const demo = buildDemo({ today: demoToday, nowMs: NOW });
     const src = Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, demo);
     const B = buildBase(src, defaultFilters(), demoToday, NOW);
@@ -3499,7 +3704,7 @@ function runSelfTest() {
     ok('demo: legacy installs, cohorts and the two excluded devices', B.idxAll.legacy.length > 0 && B.idxAll.cohorted.length > 30 && B.idxAll.excludedPersons === 2);
     const dSplit = syncByVersionSplit(B.idxAll, completeDays(demoToday, 30), MIDNIGHT_FIX_VERSION);
     ok('demo: the midnight cluster is on old builds and not on 1.9.5+', dSplit.before.night.failed > 0 && (dSplit.after.night.rate.pct || 0) < (dSplit.before.night.rate.pct || 0));
-    ok('demo: 8 complete weeks of install cohorts', tcx.mondays.length === 8);
+    ok('demo: 8 weeks of install cohorts, the newest the one holding yesterday', tcx.mondays.length === 8 && tcx.mondays[7] === mondayOf(lastCompleteDay(demoToday)));
     ok('demo: the empty scenario reads every table and returns no rows', buildDemo({ empty: true, today: demoToday, nowMs: NOW }).fleet.length === 0);
     const staleFeed = feederFreshness(buildDemo({ stale: true, today: demoToday, nowMs: NOW }).syncRuns, NOW);
     ok('demo: the stale scenario has old runs and a failed fleet run', staleFeed.find(f => f.key === 'asc').ageH > 48 && feederLastRun(staleFeed.find(f => f.key === 'posthog')) === 'failed');
@@ -3512,7 +3717,7 @@ function runSelfTest() {
 
   // ── P. D-37: historical metrics only ────────────────────────────────────
   {
-    const pToday = todayIST();
+    const pToday = TODAY;
     const pSrc = Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, buildDemo({ today: pToday, nowMs: NOW }));
     const pB = buildBase(pSrc, defaultFilters(), pToday, NOW);
     const sB = buildBase(Object.assign({ sourceErrors: {} }, buildDemo({ stale: true, today: pToday, nowMs: NOW })), defaultFilters(), pToday, NOW);
@@ -3554,6 +3759,206 @@ function runSelfTest() {
     ok('structure: both themes define every colour token', ['--bg', '--surface', '--text', '--muted', '--act', '--accent', '--heat'].every(k => (pageSource.match(new RegExp(k + ':', 'g')) || []).length >= 2));
   }
 
+  // ── R. Oct 11 2026 review: numbers on the lines, the week so far, honest names ──
+  {
+    const SUN = '2026-10-11', SAT = '2026-10-10';   // Oct 11 2026 is a Sunday; the last complete day is Saturday
+    const SUN_NOW = new Date(SUN + 'T06:00:00Z').getTime();
+    const dom = html => { const d = document.createElement('div'); d.innerHTML = html; return d; };
+
+    // R1. Weeks count back from the one holding yesterday.
+    eq('so far: the week in progress is a row when the days end on yesterday',
+       weeksIn(dayList('2026-09-14', SAT), null, SAT), ['2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05']);
+    eq('so far: without the live day the unfinished week stays out (the old rule)',
+       weeksIn(dayList('2026-09-14', SAT), null), ['2026-09-14', '2026-09-21', '2026-09-28']);
+    eq('so far: a window that does not end on yesterday never gains a partial week',
+       weeksIn(dayList('2026-09-14', '2026-10-07'), null, SAT), ['2026-09-14', '2026-09-21', '2026-09-28']);
+    eq('so far: a window ending on a Sunday lists that finished week once',
+       weeksIn(dayList('2026-09-14', '2026-10-04'), null, '2026-10-04'), ['2026-09-14', '2026-09-21', '2026-09-28']);
+    eq('so far: the cap keeps the newest, the week so far included', weeksIn(dayList('2026-08-03', SAT), 2, SAT), ['2026-09-28', '2026-10-05']);
+    {
+      const rw = resolveDays({ kind: 'default' }, { weeks: 8 }, SUN, '2026-07-05');
+      eq('so far: Default for a weekly tile = the latest 8 weeks, ending with the week of yesterday',
+         [rw.days[0], rw.days[rw.days.length - 1], weeksIn(rw.days, null, SAT).length], ['2026-08-17', SAT, 8]);
+      ok('so far: and its label says the newest week is so far', /newest so far/.test(rw.label));
+      ok('so far: a window that ends on a finished Sunday does not say so far', !/so far/.test(resolveDays({ kind: 'default' }, { weeks: 8 }, '2026-10-12', null).label));
+    }
+
+    // R2. Triangles: reached | partial | future, and today never counted.
+    {
+      const LAST = '2026-09-16';   // a Wednesday
+      const rows = [
+        fe('a', '2026-09-08', 'app_first_launch'), fe('a', '2026-09-15', 'tab_viewed', 'body'),
+        fe('b', '2026-09-08', 'app_first_launch'),
+        fe('f', '2026-09-08', 'app_first_launch'), fe('f', '2026-09-17', 'tab_viewed', 'body'),   // active only AFTER the last complete day
+        fe('c', '2026-09-14', 'app_first_launch'), fe('c', '2026-09-15', 'tab_viewed', 'body'),
+        fe('d', '2026-09-17', 'app_first_launch'),                                              // installs "today"
+        fe('e', '2026-09-15', 'tab_viewed', 'body'),                                            // legacy
+      ];
+      const ix = buildIndex(rows, [], '2026-09-17');
+      const ms = ['2026-09-07', '2026-09-14'];
+      const it = installTriangle(ix, ms, LAST, 2);
+      eq('so far: the week in progress is the newest row, with its days so far', [it[1].week, it[1].partial, it[1].days], ['2026-09-14', true, 3]);
+      eq('so far: someone who installs after the last complete day is not in its row', it[1].n, 1);
+      eq('so far: an older row’s column for that week is partial, with the same 3 days', [it[0].cells[1].state, it[0].cells[1].days], ['partial', 3]);
+      eq('so far: and counts only days already over (f was active on the 17th, not before)', it[0].cells[1].num, 1);
+      eq('so far: the week’s own cell is partial too', [it[1].cells[0].state, it[1].cells[0].reached], ['partial', true]);
+      ok('so far: the partial row has no future cell with a value — what lies ahead is blank',
+         it[1].cells.slice(1).every(c => c.state === 'future' && c.reached === false && c.num === 0 && c.rate === null));
+      ok('so far: a finished week stays a full cell', it[0].cells[0].state === 'full' && it[0].cells[0].days === 7);
+      const at = activityTriangle(ix, ms, LAST, 2);
+      eq('so far: the activity row for the week so far holds only people active on its complete days', at[1].n, 3);
+      const ht = triangleHtml(it, 'ret.install', 'Installed week of');
+      ok('so far: the newest row says so far and its cell is marked, not a dot', /14 Sep <span class="qual">so far/.test(ht) && /class="cell-partial"/.test(ht));
+      ok('so far: the note under the table explains the italic cell', /week so far: only the days already over/.test(ht));
+      ok('so far: a week with no finished day is still a dot, never 0%', /cell-blank[^>]*>·</.test(ht) && !/>0%</.test(ht));
+      ok('so far: the cell’s drill names the days', /week so far, 3 of 7 days/.test(triangleDrill(it, '2026-09-07|1', 'installed').title));
+      ok('so far: the table view marks the row', triangleTable(it).cols[0].fmt('2026-09-14', triangleTable(it).rows[1]) === '14 Sep (so far)');
+      // Leading empty weeks are not rows, and the columns shrink with them.
+      const lead = installTriangle(ix, ['2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14'], LAST, 4);
+      eq('so far: leading weeks nobody installed in are dropped, columns with them', [lead.length, lead[0].week, lead[0].cells.length], [2, '2026-09-07', 2]);
+      eq('so far: a window with nobody in it draws no rows', installTriangle(ix, ['2026-08-24'], LAST, 1), []);
+      const fw = funnelByWeek(null, ix, ms, LAST);
+      eq('so far: the funnel counts the week in progress by its complete days', [fw[1].days, fw[1].steps[1].n], [3, 1]);
+      const uw = usageByWeek(ix, ms, screenItems(ix), LAST);
+      eq('so far: the usage grid counts the week in progress by its complete days', uw.actives, [3, 3]);
+      const ug = usageGrid(uw, 'use.screens');
+      ok('so far: and marks that column', /so far/.test(ug) && uw.lastDay === LAST);
+      eq('so far: usage columns before anyone was active are dropped', usageByWeek(ix, ['2026-08-24', '2026-09-07'], screenItems(ix), LAST).weeks, ['2026-09-07']);
+    }
+
+    // R3. The tiles on a Sunday, on the demo fixture.
+    {
+      const sunSrc = Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, buildDemo({ today: SUN, nowMs: SUN_NOW }));
+      const sB = buildBase(sunSrc, defaultFilters(), SUN, SUN_NOW);
+      const ri = TILES.find(t => t.id === 'ret.install'), ra = TILES.find(t => t.id === 'ret.activity'), nf = TILES.find(t => t.id === 'new.funnel');
+      const cxi = tileCtx(ri, sB);
+      eq('so far: on a Sunday the install triangle ends with the week of Oct 5, in progress', [cxi.mondays.length, cxi.mondays[7], cxi.lastDay], [8, '2026-10-05', SAT]);
+      const tri = installTriangle(sB.idx, cxi.mondays, cxi.lastDay, cxi.mondays.length);
+      const top = tri[tri.length - 1];
+      ok('so far: the newest cohort is there: 6 of 7 days, with people in it', top.week === '2026-10-05' && top.partial && top.days === 6 && top.n > 0);
+      ok('so far: ret.install prints it', /so far/.test(ri.view.call(ri, cxi)) && /cell-partial/.test(ri.view.call(ri, cxi)));
+      ok('so far: ret.activity prints it', /so far/.test(ra.view.call(ra, tileCtx(ra, sB))));
+      ok('so far: new.funnel prints it', /so far/.test(nf.view.call(nf, tileCtx(nf, sB))));
+      ok('so far: the use grids print it', ['use.screens', 'use.features'].every(id => { const t = TILES.find(x => x.id === id); return /so far/.test(t.view.call(t, tileCtx(t, sB))); }));
+      ok('so far: a tile’s opened table and drill still open for the partial row', ri.table(cxi).rows.length === tri.length && ri.drill(`${top.week}|0`, cxi).rows.length === top.cells[0].num);
+      const cxAll = tileCtx(ri, sB, { kind: 'all' });
+      ok('All: starts on the Monday of the first day any source knows, and is not capped at 12', cxAll.mondays[0] === mondayOf(sB.earliest) && cxAll.mondays.length > 12);
+      const triAll = installTriangle(sB.idx, cxAll.mondays, cxAll.lastDay, cxAll.mondays.length);
+      ok('All: the rows start at the first week with someone in it', triAll.length > 0 && triAll[0].n > 0 && triAll.length <= cxAll.mondays.length);
+      eq('All: the newest row is still the week of yesterday', triAll[triAll.length - 1].week, '2026-10-05');
+      eq('7d: the in-progress week is a row on a short range too', tileCtx(ri, sB, { kind: 'n', n: 7 }).mondays, ['2026-10-05']);
+      eq('custom: a range ending before yesterday gains no partial week', tileCtx(ri, sB, { kind: 'custom', from: '2026-09-01', to: '2026-09-23' }).mondays.slice(-1), ['2026-09-14']);
+      ok('so far: no week is a row twice', new Set(cxAll.mondays).size === cxAll.mondays.length);
+    }
+
+    // R4. New vs returning, and the unfiltered index that knows first days.
+    {
+      const rows = [
+        fe('r1', '2026-09-10', 'tab_viewed', 'body', { v: '1.9.4' }), fe('r1', '2026-09-18', 'tab_viewed', 'body', { v: '1.9.5' }),
+        fe('n1', '2026-09-18', 'tab_viewed', 'body', { v: '1.9.5' }), fe('n2', '2026-09-18', 'tab_viewed', 'body', { v: '1.9.5' }),
+        fe('r2', '2026-09-17', 'tab_viewed', 'body', { v: '1.9.5' }), fe('r2', '2026-09-18', 'tab_viewed', 'body', { v: '1.9.5' }),
+      ];
+      const all = buildIndex(rows, [], TODAY);
+      const s = activesSeries(all, ['2026-09-17', '2026-09-18']);
+      eq('split: DAU = new + returning; new = the day is the first with any event', s.map(x => [x.dau, x.fresh, x.returning]), [[1, 1, 0], [4, 2, 2]]);
+      const sl = buildIndex(filterFleet(rows, { versions: ['1.9.5'], countries: [] }), [], TODAY);
+      eq('split: under a filter, first days come from the unfiltered index (an upgrade is not new)', activesSeries(sl, ['2026-09-18'], all)[0].fresh, 2);
+      eq('split: without it the same filter would call the upgrader new — why the index is passed', activesSeries(sl, ['2026-09-18'])[0].fresh, 3);
+    }
+
+    // R5. Line charts carry their numbers.
+    {
+      const days = dayList('2026-09-01', '2026-09-10');
+      const A = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], Bv = [2, 3, 4, 5, 6, 7, 8, 9, null, 10], C = [0, 0, 0, 0, 0, 0, 0, 0, 0, 11];
+      const mk = tileId => lineChart({ tileId, labels: days, xFmt: fmtDay, height: 120, recentDays: 7,
+        series: [{ name: 'A', color: 'var(--s1c)', values: A }, { name: 'B', color: 'var(--s2c)', values: Bv }, { name: 'C', color: 'var(--s3c)', values: C }] });
+      const d = dom(mk('x.test'));
+      const ends = [...d.querySelectorAll('.lc-end')];
+      eq('numbers: every series ends with its last value beside the line', ends.map(e => e.textContent), ['10', '10', '11']);
+      ok('numbers: each in its own series colour', ends.map(e => (e.getAttribute('style').match(/color:(var\(--s\dc\))/) || [])[1]).join() === 'var(--s1c),var(--s2c),var(--s3c)');
+      const tops = ends.map(e => parseFloat(e.style.top)).sort((a, b) => a - b);
+      ok('numbers: labels that would sit on each other are pulled at least 12px apart', tops.every((t, i) => !i || t - tops[i - 1] >= 12 - 1e-6));
+      eq('numbers: each last point has a marker', d.querySelectorAll('.lc-pt').length, 3);
+      eq('numbers: spreadLabels keeps order and gap', spreadLabels([50, 50, 52], 12, 6, 114), [50, 62, 74]);
+      eq('numbers: and walks a stack back up off the bottom edge', spreadLabels([110, 111, 112], 12, 6, 114), [90, 102, 114]);
+      eq('numbers: a stacked area prints no end labels (its bands are not lines)', dom(lineChart({ labels: days, stacked: true, series: [{ name: 'A', color: 'var(--s1c)', values: A }, { name: 'B', color: 'var(--s2c)', values: C }] })).querySelectorAll('.lc-end').length, 0);
+      eq('numbers: a series that ends on a gap labels its last KNOWN point', dom(lineChart({ labels: days, series: [{ name: 'G', color: 'var(--s1c)', values: [1, 2, 3, null, null, null, null, null, null, null] }] })).querySelector('.lc-end').textContent, '3');
+      // the recent-days table
+      const th = [...d.querySelectorAll('.recent thead th')].map(x => x.textContent);
+      eq('numbers: the table has the last 7 days as columns', th.slice(1), dayList('2026-09-04', '2026-09-10').map(fmtDay));
+      const trs = [...d.querySelectorAll('.recent tbody tr')];
+      eq('numbers: one row per series', trs.map(tr => tr.querySelector('td').textContent), ['A', 'B', 'C']);
+      eq('numbers: its values are the series’ last 7 points, a gap as a dash',
+         trs.map(tr => [...tr.querySelectorAll('td.num')].map(td => td.textContent)),
+         [A, Bv, C].map(v => v.slice(-7).map(x => (x === null ? '—' : fmtInt(x)))));
+      eq('numbers: with fewer points than asked, the table shows what there is', dom(lineChart({ labels: days.slice(0, 3), recentDays: 7, series: [{ name: 'A', color: 'var(--s1c)', values: [1, 2, 3] }] })).querySelectorAll('.recent thead th').length, 4);
+      ok('numbers: without recentDays there is no table', !dom(lineChart({ labels: days, series: [{ name: 'A', color: 'var(--s1c)', values: A }] })).querySelector('.recent'));
+      // the readout
+      const hits = [...d.querySelectorAll('.lc-hit')];
+      eq('readout: one strip per day', hits.length, 10);
+      ok('readout: each strip carries its day and every series’ value', hits.every((h, i) => { const t = strip(h.dataset.ro); return t.startsWith(fmtDay(days[i])) && t.includes('A ' + fmtInt(A[i])) && t.includes('B ' + (Bv[i] === null ? '—' : fmtInt(Bv[i]))) && t.includes('C ' + fmtInt(C[i])); }));
+      ok('readout: no native title tooltip is left on the strips', hits.every(h => !h.hasAttribute('title')));
+      ok('readout: the line above the plot starts on the latest day', d.querySelector('.lc-ro').textContent.startsWith('10 Sep'));
+      ok('readout: and the stacked chart adds a total', /total/.test(strip(dom(lineChart({ labels: days, stacked: true, series: [{ name: 'A', color: 'var(--s1c)', values: A }, { name: 'B', color: 'var(--s2c)', values: A }] })).querySelector('.lc-ro').innerHTML)));
+      const tile = document.createElement('article'); tile.dataset.tile = 'x.test'; tile.innerHTML = mk('x.test');
+      const th2 = tile.querySelectorAll('.lc-hit');
+      lcShow(th2[7], false);
+      ok('readout: a hover previews the day but picks nothing', /8 Sep/.test(tile.querySelector('.lc-ro').textContent) && LC_SEL['x.test'] === undefined && !tile.querySelector('.lc-hit.sel'));
+      lcRest(tile.querySelector('.lc'));
+      ok('readout: and the line goes back when the pointer leaves', /10 Sep/.test(tile.querySelector('.lc-ro').textContent));
+      lcShow(th2[2], true);
+      ok('readout: a tap picks the day, marks the strip and is remembered by tile', /3 Sep/.test(tile.querySelector('.lc-ro').textContent) && th2[2].classList.contains('sel') && LC_SEL['x.test'] === '2026-09-03');
+      lcShow(th2[7], false); lcRest(tile.querySelector('.lc'));
+      ok('readout: the picked day is where a hover returns to', /3 Sep/.test(tile.querySelector('.lc-ro').textContent));
+      const again = dom(mk('x.test'));
+      ok('readout: a re-render (a drill opening) keeps the picked day', /3 Sep/.test(again.querySelector('.lc-ro').textContent) && again.querySelectorAll('.lc-hit.sel').length === 1);
+      delete LC_SEL['x.test'];
+      ok('readout: a pick of a day the chart no longer has falls back to the latest', (LC_SEL['x.test'] = '2020-01-01', /10 Sep/.test(dom(mk('x.test')).querySelector('.lc-ro').textContent)));
+      delete LC_SEL['x.test'];
+
+      // On the real tiles, demo fixture.
+      const act = TILES.find(t => t.id === 'users.actives'), stk = TILES.find(t => t.id === 'users.sticky'), drift = TILES.find(t => t.id === 'trust.drift'), bv = TILES.find(t => t.id === 'users.byVersion');
+      const ds = buildDemo({ today: TODAY, nowMs: NOW });
+      const DB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, ds), defaultFilters(), TODAY, NOW);
+      const acx = tileCtx(act, DB);
+      const ser = activesSeries(DB.idx, acx.days, DB.idxAll);
+      const ad = dom(act.view.call(act, acx));
+      const lastS = ser[ser.length - 1];
+      eq('tiles: users.actives prints the last DAU, WAU and MAU at the end of the lines', [...ad.querySelectorAll('.lc-end')].map(e => e.textContent), [lastS.dau, lastS.wau, lastS.mau].map(fmtInt));
+      const art = [...ad.querySelectorAll('.recent tbody tr')].map(tr => [...tr.querySelectorAll('td.num')].map(td => td.textContent));
+      eq('tiles: and a table of the last 7 days, DAU/WAU/MAU, equal to the series', art, ['dau', 'wau', 'mau'].map(k => ser.slice(-7).map(x => fmtInt(x[k]))));
+      eq('tiles: seven date columns, three rows', [ad.querySelectorAll('.recent thead th').length - 1, ad.querySelectorAll('.recent tbody tr').length], [7, 3]);
+      ok('tiles: the table’s dates are drillable, like the strips', ad.querySelectorAll('.recent thead th[data-drill]').length > 0);
+      ok('split: every day, new + returning = DAU', ser.every(x => x.fresh + x.returning === x.dau) && ser.some(x => x.fresh > 0) && ser.some(x => x.returning > 0));
+      ok('split: the tile prints the split: in the DAU figure and as its own chart', new RegExp(`${lastS.fresh} new · ${lastS.returning} returning`).test(ad.textContent) && /new and returning/.test(ad.textContent));
+      eq('split: the opened table carries New and Returning', act.table(acx).cols.map(c => c.label).slice(0, 4), ['Day', 'DAU', 'New', 'Returning']);
+      const sd = dom(stk.view.call(stk, tileCtx(stk, DB)));
+      eq('tiles: users.sticky prints its end value and a 7-day table of one row', [sd.querySelectorAll('.lc-end').length, sd.querySelectorAll('.recent tbody tr').length, sd.querySelectorAll('.recent thead th').length - 1], [1, 1, 7]);
+      eq('tiles: the drift chart prints both of its series at the end', dom(drift.view.call(drift, tileCtx(drift, DB))).querySelectorAll('.lc-end').length, 2);
+      ok('tiles: the stacked version chart has a readout and no end labels', (() => { const v = dom(bv.view.call(bv, tileCtx(bv, DB))); return v.querySelectorAll('.lc-end').length === 0 && v.querySelector('.lc-ro') && /total/.test(v.querySelector('.lc-ro').textContent); })());
+    }
+
+    // R6. Apple’s source names, said in plain words; the raw value stays in the drill.
+    {
+      const nd = TILES.find(t => t.id === 'new.downloads');
+      const ds = buildDemo({ today: TODAY, nowMs: NOW });
+      const DB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, ds), defaultFilters(), TODAY, NOW);
+      const ncx = tileCtx(nd, DB);
+      const face = strip(nd.view.call(nd, ncx));
+      ok('names: App referrer reads “Another app (e.g. AppRaven, Reddit app)” and Web referrer “A website”', face.includes('Another app (e.g. AppRaven, Reddit app)') && face.includes('A website'));
+      ok('names: Apple’s raw words are not on the face', !/App referrer|Web referrer/.test(face));
+      eq('names: an unmapped source keeps Apple’s name', sourceLabel('App Store search'), 'App Store search');
+      const bs = downloadsByDaySource(DB.dl, ncx.days);
+      eq('names: the reducer keeps the raw name beside the label', ['App referrer', 'Web referrer'].map(n => { const s = bs.sources.find(x => x.name === n); return s && s.label; }), ['Another app (e.g. AppRaven, Reddit app)', 'A website']);
+      const tcols = nd.table(ncx).cols.map(c => c.label);
+      ok('names: the opened table’s columns use the plain words', tcols.includes('A website') && tcols.includes('Another app (e.g. AppRaven, Reddit app)') && !tcols.includes('Web referrer'));
+      const day = ncx.days.find(dd => DB.dl.some(r => isFirstTime(r) && r.date === dd && r.source_type === 'App referrer'));
+      const dr = day && nd.drill(dayKey(day), ncx);
+      ok('names: the drill keeps Apple’s raw value, word for word', !!dr && dr.rows.some(r => r.source === 'App referrer') && !dr.rows.some(r => r.source === 'Another app (e.g. AppRaven, Reddit app)'));
+      ok('names: and says the column is Apple’s', !!dr && dr.cols[0].label === 'Source, as Apple names it');
+    }
+  }
+
   const fails = R.filter(r => !r.pass);
   document.body.innerHTML = `
     <div style="max-width:1000px;margin:0 auto;padding:24px 22px 80px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
@@ -3577,6 +3982,10 @@ function runSelfTest() {
   if (q.has('selftest')) { runSelfTest(); return; }
   F = parseHash(location.hash);
   document.addEventListener('click', onClick);
+  document.addEventListener('pointermove', onPointer);
+  document.addEventListener('pointerdown', onPointer);
+  document.addEventListener('pointerout', onPointerOut);
+  document.addEventListener('focusin', onFocusIn);
   document.addEventListener('change', onChange);
   document.addEventListener('keydown', onKey);
   window.addEventListener('hashchange', () => { F = parseHash(location.hash); if (D.fleet !== null || D.demo) render(); });
