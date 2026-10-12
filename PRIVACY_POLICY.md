@@ -1,6 +1,6 @@
 # Privacy Policy — Axon
 
-*Last updated: October 11, 2026*
+*Last updated: October 12, 2026*
 
 ## Overview
 
@@ -22,14 +22,14 @@ Axon ("the app", "we", "us") is a health app for iPhone that reads Apple Health 
 
 ## 2. Always-on: usage analytics (no health values), and the optional account
 
-**Axon works without an account.** From v1.9.1, nothing about the app's core function — reading Apple Health and computing your four scores on your phone — requires you to sign in. Sign in with Apple is optional and lives in Profile → Account; it adds an invite code you can share and a way to send feedback that can be answered. It does not back up, sync or restore your health history — your scores, logs and settings live only on this phone (Apple Health is untouched, and the last 120 days of scores rebuild from it on a fresh install).
+**Axon works without an account.** From v1.9.1, nothing about the app's core function — reading Apple Health and computing your four scores on your phone — requires you to sign in. Sign in with Apple is optional and lives in Profile → Account; it adds an invite code you can share and lets us answer your feedback. Anyone can send feedback, signed in or not (section 4). It does not back up, sync or restore your health history — your scores, logs and settings live only on this phone (Apple Health is untouched, and the last 120 days of scores rebuild from it on a fresh install).
 
 **From every install, whether or not you sign in**, the following non-health data goes to our product-analytics service (PostHog, US Cloud):
 
 - **Usage events:** which screens you view, which controls you use, session length, and device context (app version, OS version, device model, timezone). These events carry **no health values** — a check-in event records that you answered, never what you answered. This is an enforced engineering rule, not a preference.
 - **Install-level events:** that the app was opened for the first time, whether you were shown the sign-in option and from where, whether you tapped Sign in with Apple and the outcome (signed in / cancelled / did not complete — never the reason text), and once a day whether the app is being used anonymously or signed in.
 
-While you are not signed in, these events are keyed by an anonymous identifier generated on your device by the analytics SDK — no account, no name, no email. The same non-health usage events are also written to our backend (Supabase, hosted on AWS) under a separate **random per-install identifier** generated on your device. That identifier is written only to records that carry no account and is never stored alongside your Apple identifier; those records carry no health values, no device context and no session identifier — only the event, the app version it came from, and that identifier. We use this to understand how many people who download the app reach their first score, and how many choose to sign in.
+While you are not signed in, these events are keyed by an anonymous identifier generated on your device by the analytics SDK — no account, no name, no email. The same non-health usage events are also written to our backend (Supabase, hosted on AWS) under a separate **random per-install identifier** generated on your device. That identifier is written only to records that carry no account and is never stored alongside your Apple identifier; these usage records carry no health values, no device context and no session identifier — only the event, the app version it came from, and that identifier. We use this to understand how many people who download the app reach their first score, and how many choose to sign in. The same identifier is attached to feedback you send without an account (section 4).
 
 **When you sign in with Apple**, the following is added:
 
@@ -70,17 +70,23 @@ In **Profile → Connections** there is a switch: **"Connect Axon to my AI assis
 - **If your phone stops updating it:** a connection that has not been updated from your phone for **45 days** ends by itself — the key stops working and the copy, the requests and the key records are deleted. A weekly check removes any that no assistant asked for in the meantime.
 - We keep only a daily count of how many reads and writes each connection made (under a one-way hash of the connection ID, with no health values), to protect the service from abuse and to know how many people use the feature.
 
-## 4. Per-report: feedback diagnostics (off by default)
+## 4. In-app feedback, and its optional diagnostics
 
-When you send in-app feedback, you can flip **"Attach diagnostic data"** for that report. If you do, the report includes your last 14 days of scores and recent app logs so we can debug your issue. This attachment is tied to your account (so we can reply to *your* problem) and is used only for handling that report. The toggle is off by default and applies to a single report at a time.
+**Anyone can send feedback** (Profile → Feedback, or wherever the app asks for it), signed in or not. A report holds the category you pick, the message you write, and the app version. What you write is up to you — we read every message, so leave out anything you would not want us to see.
+
+- **When you are signed in**, the report is stored with your Apple sign-in identifier, so we can reply.
+- **When you are not**, the report is stored with the random per-install identifier described in section 2 — never your Apple identifier, name or email — so we cannot reply to it. We use that identifier only to keep one phone from sending more than five reports a day without an account, and to delete them when you erase Axon's data (section 5).
+
+**Diagnostics (off by default, per report):** you can flip **"Attach diagnostic data"** for a report. If you do, that report includes your last 14 days of scores, recent app logs, and the app and iOS versions, so we can debug your issue. The attachment travels with that report — with your account if you are signed in, with the per-install identifier if not — and is used only for handling that report. The toggle applies to a single report at a time.
 
 ## 5. Account deletion — real and immediate
 
-**Profile → Delete Account** permanently deletes, in one action:
+**Profile → Delete Account** (or **Erase everything on this phone** when you are not signed in) permanently deletes, in one action:
 
 - all local data on your device (scores, check-ins, journal, settings, sign-in state), and
 - all server rows tied to your account — profile (including email), usage events, feedback, logs — and any contributed health data under your device's contribution ID.
-- *(Draft, 2.1)* everything held for **Connect Axon to my AI assistant** (section 3a) — the copy, the key records and any pending requests.
+- any feedback this iPhone sent without an account, with its diagnostics, found by the per-install identifier (section 4).
+- *(from 2.1)* everything held for **Connect Axon to my AI assistant** (section 3a) — the copy, the key records and any pending requests.
 
 Deletion is executed by a dedicated server-side function; it is not reversible. You can also email us (below) for deletion.
 
@@ -88,7 +94,7 @@ Deletion is executed by a dedicated server-side function; it is not reversible. 
 
 | Service | What it receives | What it never receives |
 |---|---|---|
-| **Supabase** (supabase.com, on AWS) | Account profile, usage events (keyed by your Apple identifier when you are signed in, by the random per-install identifier when you are not), feedback, opt-in contributions, opt-in diagnostics; *(draft, 2.1)* while you keep it on, the copy for your AI assistant (section 3a), under its own random connection ID | Health values outside the opt-ins; journal entries; your calendar; device context or a session identifier on the anonymous records |
+| **Supabase** (supabase.com, on AWS) | Account profile, usage events (keyed by your Apple identifier when you are signed in, by the random per-install identifier when you are not), feedback (likewise), opt-in contributions, opt-in diagnostics; *(from 2.1)* while you keep it on, the copy for your AI assistant (section 3a), under its own random connection ID | Health values outside the opt-ins; journal entries; your calendar; device context or a session identifier on the anonymous usage records |
 | **PostHog** (posthog.com, US Cloud) | Usage events + device context — keyed by an anonymous per-device identifier until you sign in, by your Apple sign-in identifier after | Any health value; your email or name; journal entries |
 
 We do not sell, trade, or rent your personal information. We do not use your data for advertising. No other third parties receive your data.
