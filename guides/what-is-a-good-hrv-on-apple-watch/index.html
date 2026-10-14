@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>What Is a Good HRV on Apple Watch?</title>
+<meta name="description" content="No single HRV number is good for everyone. What Apple Watch HRV measures, why it won't match WHOOP, and how to read it against your own baseline.">
+<link rel="canonical" href="https://jaygosalia4.github.io/axon-support/guides/what-is-a-good-hrv-on-apple-watch/">
+<meta property="og:type" content="article"><meta property="og:title" content="What Is a Good HRV on Apple Watch?"><meta property="og:description" content="No single HRV number is good for everyone. What Apple Watch HRV measures, why it won't match WHOOP, and how to read it against your own baseline."><meta property="og:url" content="https://jaygosalia4.github.io/axon-support/guides/what-is-a-good-hrv-on-apple-watch/">
+<link rel="stylesheet" href="../../site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "headline": "What Is a Good HRV on Apple Watch? How to Read It",
+      "description": "No single HRV number is good for everyone. What Apple Watch HRV measures, why it won't match WHOOP, and how to read it against your own baseline.",
+      "datePublished": "2026-10-14",
+      "dateModified": "2026-10-14",
+      "author": {
+        "@type": "Organization",
+        "name": "Axon"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Axon"
+      },
+      "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/guides/what-is-a-good-hrv-on-apple-watch/"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is a good HRV on Apple Watch?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "There is no universal good number. HRV differs between people, and Apple Watch's standard HRV reading is SDNN in milliseconds, which isn't comparable with the RMSSD that WHOOP reports. A better question is whether last night's HRV was high or low for you, which means comparing it with your own recent baseline."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why is my Apple Watch HRV different from my WHOOP?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "They calculate different statistics. Apple Health's standard HRV reading is SDNN; WHOOP calculates RMSSD and reads HRV during sleep. The same heartbeats produce different numbers, so compare each device only with its own history."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How often does Apple Watch measure HRV?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "In the background, while you are still, so the number of readings depends on your activity. Series 12 and Ultra 4 measure HRV as often as every five minutes, which Apple says is 24 times as often as Series 11."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is Apple Watch HRV accurate?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Treat it as an estimate rather than a reference instrument. A 2024 study of 39 healthy adults found the Series 9 and Ultra 2 read about 8 ms lower than a Polar H10 chest strap on average, and the authors advised caution when interpreting Apple Watch HRV."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does my HRV change from night to night?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Many things move it, including sleep, hard training days, stress and alcohol, so one night has many possible causes. Watch the trend over several nights rather than reacting to a single reading."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How long before Axon uses my HRV in a Recovery score?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "About a week of overnight Apple Watch wear. Until then Axon shows a building-baseline placeholder instead of a number, because it needs to learn what is normal for you first."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head><body>
+<header><a class="logo" href="../../"><div class="logo-dot"></div>Axon</a><nav><a href="../">Guides</a><a href="../../#faq">FAQ</a><a href="../../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
+<main>
+<p class="eyebrow">Guides</p>
+<h1>What Is a Good HRV on Apple Watch?</h1>
+<p class="lede">People search for a target number, and the honest answer is that there isn't one. Here is what your Apple Watch's HRV figure measures, why it won't match a WHOOP, and how to turn it into a recovery signal you can act on.</p>
+<p class="meta">By the Axon team · Published 14 October 2026 · Apple and WHOOP details checked 14 October 2026</p>
+<div class="answer"><p><strong>Quick answer.</strong> There isn't a single good number. HRV varies a lot from person to person, and Apple Watch's standard HRV reading is a different statistic (SDNN, in milliseconds) from the one WHOOP uses (RMSSD), so a friend's figure, or another device's, tells you little. What's useful is your overnight HRV compared with your own recent normal, followed as a trend across days. That comparison is the core of Axon's Recovery score: overnight HRV against your own 30-night baseline.</p></div>
+
+
+<h2>What HRV is</h2>
+<p>Heart rate variability (HRV) is the small variation in the time between one heartbeat and the next. A very regular rhythm gives a lower HRV and a more varied one gives a higher HRV. Within a single person, WHOOP's guidance reads a higher-than-usual HRV as a sign of better recovery and a lower-than-usual one as a sign of carrying more load. That is the same logic recovery scores use, and it only works against <em>your</em> usual.</p>
+
+<h2>What Apple Watch actually measures</h2>
+<p>The standard HRV reading Apple Watch saves to Health is SDNN — the standard deviation of the intervals between normal heartbeats — in milliseconds. It is calculated from pulse-to-pulse intervals the watch's optical sensor picks up at the wrist, mainly while you are still, so how many readings you get depends on how still you were.</p>
+<p>Series 12 and Ultra 4 change the picture. Apple says they measure HRV as often as every five minutes, which it puts at 24 times as often as Series 11, and they add a Recovery HRV view that Apple describes as best for spotting daily signals of stress and recovery. Apple's announcement doesn't say which statistic Recovery HRV uses, so don't assume it matches the older SDNN figure. Earlier Watches record HRV far less often, so a single night rests on fewer readings.</p>
+
+<h2>Why your number won't match a friend's, or another device's</h2>
+<ul>
+<li><strong>Different statistic.</strong> Apple Health's standard HRV reading is SDNN. WHOOP calculates RMSSD, the root mean square of successive differences between heartbeats, which a 2017 review calls the primary time-domain measure of vagally mediated change in HRV. Same heartbeats, different arithmetic: the two numbers aren't interchangeable.</li>
+<li><strong>Different timing.</strong> WHOOP reads HRV during sleep, on purpose. Apple Watch takes readings whenever you're still.</li>
+<li><strong>Different people.</strong> WHOOP's own guide to a good HRV says the answer is personal, and that your trend over days matters more than comparing your number with someone else's.</li>
+</ul>
+<p>The practical rule: compare yourself with yourself, on one device.</p>
+
+<h2>So what is a normal HRV?</h2>
+<p>Published reference values exist, but they come mostly from short, controlled recordings. One systematic review pooled 44 studies and 21,438 healthy participants and found its short-term values came in lower than the earlier published norms. An overnight reading from a wrist sensor is a different measurement again. It's the approach Apple's own Vitals app takes for the metrics it shows: it builds a typical range from your own history instead of handing you a target, then flags readings that drift outside it.</p>
+
+<h2>How accurate is Apple Watch HRV?</h2>
+<p>Treat it as an estimate, not a lab instrument. In a 2024 study, 39 healthy adults gave 316 HRV measurements over 14 days with an Apple Watch Series 9 or Ultra 2 and a Polar H10 chest strap with analysis software as the reference. The Watch read about 8 ms lower on average (a difference of −8.31 ms in SDNN), and the authors advised caution when interpreting Apple Watch HRV. Resting heart rate agreed with the reference on average. The takeaway isn't that HRV on your wrist is worthless. It's that you shouldn't read much into one night's figure, and the direction of change across several nights is the safer signal.</p>
+
+<h2>What moves your HRV</h2>
+<p>WHOOP's guidance lists the usual suspects: the quantity, quality and consistency of your sleep, several hard training days in a row, psychological stress, and alcohol. Because so many things push on it, one low night has many possible causes. Treat it as a prompt to look at your last day — late night, hard session, a drink, a stressful week — and not as a verdict.</p>
+
+<h2>How Axon turns HRV into Recovery</h2>
+<p>Axon doesn't measure HRV itself. It reads the HRV your Apple Watch has already saved to Health and does the part the raw number can't:</p>
+<ul>
+<li><strong>Overnight readings, against your own baseline.</strong> Each night's HRV is compared with your own 30-night baseline, so the question becomes "high or low for me?" instead of "good or bad?".</li>
+<li><strong>The biggest share of Recovery.</strong> HRV carries 40% of the Recovery score. Resting heart rate carries 30% and sleep quality 30%. Respiratory rate and blood oxygen only subtract when they fall outside their normal band, and an in-band reading costs nothing.</li>
+<li><strong>No reading is not a bad reading.</strong> If the Watch recorded no overnight HRV, Axon shows that as missing with the reason, and never as poor recovery.</li>
+<li><strong>A run-up first.</strong> Axon needs about a week of overnight wear before the comparison is dependable, so week-one scores are provisional.</li>
+</ul>
+<p>On an older Watch the nightly figure rests on fewer readings than on a Series 12, which is one more reason to trust the trend over any single night.</p>
+
+<h2>How to use your HRV number</h2>
+<p>Look at the week, not the morning. A single low night after a late dinner is ordinary. Several nights drifting below your usual, alongside a higher resting heart rate or shorter sleep, is a good reason to ease off for a day or two. Axon's scores are wellness estimates, not a diagnosis, and no replacement for a doctor. If your numbers worry you, or you feel unwell, speak to one.</p>
+
+<h2>Who should not pick Axon for this</h2>
+<ul>
+<li><strong>You want raw HRV charts.</strong> Apple's Health app shows the readings themselves. Axon's job is the synthesis — one Recovery score and the reasons behind it.</li>
+<li><strong>You want a reference-grade HRV measurement.</strong> Axon reads what your Apple Watch records; it doesn't add a sensor. In the 2024 study above, a chest strap was the reference instrument.</li>
+<li><strong>You won't wear the Watch to sleep.</strong> Axon's HRV comparison is built on overnight readings.</li>
+<li><strong>You want a health screening.</strong> Axon is a wellness tool and does not screen for or diagnose anything.</li>
+</ul>
+
+
+<div class="cta"><h2>Recovery and Readiness from the Apple Watch you already wear</h2><p>Four daily scores, computed on your iPhone. Free. No strap, no subscription.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&amp;ct=web-what-is-a-good-hrv-on-apple-watch&amp;mt=8">Get Axon on the App Store</a></div>
+
+<section class="faq" id="faq">
+<div class="faq-item"><p class="faq-q">What is a good HRV on Apple Watch?</p><p class="faq-a">There is no universal good number. HRV differs between people, and Apple Watch's standard HRV reading is SDNN in milliseconds, which isn't comparable with the RMSSD that WHOOP reports. A better question is whether last night's HRV was high or low for you, which means comparing it with your own recent baseline.</p></div>
+<div class="faq-item"><p class="faq-q">Why is my Apple Watch HRV different from my WHOOP?</p><p class="faq-a">They calculate different statistics. Apple Health's standard HRV reading is SDNN; WHOOP calculates RMSSD and reads HRV during sleep. The same heartbeats produce different numbers, so compare each device only with its own history.</p></div>
+<div class="faq-item"><p class="faq-q">How often does Apple Watch measure HRV?</p><p class="faq-a">In the background, while you are still, so the number of readings depends on your activity. Series 12 and Ultra 4 measure HRV as often as every five minutes, which Apple says is 24 times as often as Series 11.</p></div>
+<div class="faq-item"><p class="faq-q">Is Apple Watch HRV accurate?</p><p class="faq-a">Treat it as an estimate rather than a reference instrument. A 2024 study of 39 healthy adults found the Series 9 and Ultra 2 read about 8 ms lower than a Polar H10 chest strap on average, and the authors advised caution when interpreting Apple Watch HRV.</p></div>
+<div class="faq-item"><p class="faq-q">Why does my HRV change from night to night?</p><p class="faq-a">Many things move it, including sleep, hard training days, stress and alcohol, so one night has many possible causes. Watch the trend over several nights rather than reacting to a single reading.</p></div>
+<div class="faq-item"><p class="faq-q">How long before Axon uses my HRV in a Recovery score?</p><p class="faq-a">About a week of overnight Apple Watch wear. Until then Axon shows a building-baseline placeholder instead of a number, because it needs to learn what is normal for you first.</p></div>
+</section>
+
+<div class="related"><h2>Related guides</h2><ul>
+<li><a href="../apple-watch-recovery-score-without-whoop/">How to get a recovery score on Apple Watch — without WHOOP</a></li>
+<li><a href="../readiness-score-explained/">Readiness score explained: what it measures and how to read it</a></li>
+<li><a href="../apple-watch-sleep-score-vs-recovery-score/">Apple Watch Sleep Score vs a recovery score</a></li>
+<li><a href="../readiness-score-on-older-apple-watch/">How to get a readiness score on an older Apple Watch</a></li>
+<li><a href="../body-battery-on-apple-watch/">Body Battery on Apple Watch: is there an equivalent?</a></li>
+</ul></div>
+
+<div class="sources"><strong>Sources</strong><ol>
+<li>Apple Support — <a href="https://support.apple.com/en-us/120277" target="_blank">Monitor your heart rate with Apple Watch</a> (HRV sampled while you are still; Recovery HRV on Series 12 and Ultra 4)</li>
+<li>Apple — <a href="https://www.apple.com/health/pdf/Heart_Rate_Calorimetry_Activity_on_Apple_Watch_November_2024.pdf" target="_blank">Using Apple Watch to measure heart rate, calorimetry, and activity</a> (optical sensor; pulse-to-pulse intervals collected mainly while you are still)</li>
+<li>Apple Developer Forums — <a href="https://developer.apple.com/forums/thread/658101" target="_blank">HealthKit API, HRV Research</a> (Health records HRV as SDNN)</li>
+<li>Apple Newsroom, 9 September 2026 — <a href="https://www.apple.com/newsroom/2026/09/apple-advances-health-and-fitness-capabilities-using-apple-intelligence/" target="_blank">Apple advances health and fitness capabilities using Apple Intelligence</a> (Recovery HRV)</li>
+<li>Apple — <a href="https://www.apple.com/apple-watch-series-12/" target="_blank">Apple Watch Series 12</a> (HRV as often as every five minutes; 24 times as often as Series 11)</li>
+<li>Apple Support — <a href="https://support.apple.com/guide/watch/vitals-apd15aa7ed96/watchos" target="_blank">Track your vitals on Apple Watch</a> (typical range from your own history)</li>
+<li>WHOOP — <a href="https://www.whoop.com/us/en/thelocker/heart-rate-variability-how-to-read-and-improve-your-hrv/" target="_blank">Heart Rate Variability: How to Read and Improve Your HRV</a> (RMSSD; measured during sleep)</li>
+<li>WHOOP — <a href="https://www.whoop.com/us/en/thelocker/what-is-a-good-hrv/" target="_blank">Good HRV Explained</a> (a good HRV is personal; trends over comparison)</li>
+<li>WHOOP — <a href="https://support.whoop.com/s/article/Heart-Rate-Variability-HRV-Insights-WHOOP-Metrics?language=en_US" target="_blank">Heart Rate Variability (HRV) Insights</a> (higher-than-usual HRV and recovery)</li>
+<li>Shaffer F, Ginsberg JP. <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5624990/" target="_blank">An Overview of Heart Rate Variability Metrics and Norms</a>. Frontiers in Public Health, 2017 (definitions of SDNN and RMSSD)</li>
+<li>Nunan D, Sandercock GRH, Brodie DA. <a href="https://onlinelibrary.wiley.com/doi/10.1111/j.1540-8159.2010.02841.x" target="_blank">A Quantitative Systematic Review of Normal Values for Short-Term Heart Rate Variability in Healthy Adults</a>. Pacing Clin Electrophysiol, 2010 (44 studies, 21,438 participants)</li>
+<li>Validity of Apple Watch Series 9 and Ultra 2 for serial measurements of HRV and resting heart rate — <a href="https://www.mdpi.com/1424-8220/24/19/6220" target="_blank">Sensors, 2024; 24(19):6220</a> (also on <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC11478500/" target="_blank">PubMed Central</a>): Apple Watch HRV (SDNN) against a Polar H10 reference, 39 adults, 316 measurements</li>
+<li>Axon scoring methodology (Recovery weights, 30-night baseline, week-one run-up) — Axon team documentation; no public page.</li>
+</ol></div>
+</main>
+<footer><span>© 2026 Axon</span><span><a href="../../">Support</a> · <a href="../">Guides</a> · <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">Privacy</a></span></footer>
+</body></html>
