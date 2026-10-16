@@ -10,6 +10,8 @@
 - This repo is **PUBLIC** (deliberately separate from the private app repo — see axon `ENGINEERING.md`). Never put keys, emails dumps, or anything private here.
 - Keep it a single self-contained `index.html` — no frameworks.
 
+**Google Search Console (verified 2026-10-16):** URL-prefix property for this site, verified by the `<meta name="google-site-verification" …>` tag in `index.html`'s `<head>`. **Never remove that tag** (Google drops the verification). `sitemap.xml` is submitted there: add every new page to it.
+
 **Known issue (found 2026-07-12):** the "Privacy Policy" link points at `raw.githubusercontent.com/jaygosalia4/Axon-Vital-Score/main/PRIVACY_POLICY.md`, but that repo is private → the link 404s for users. Fix by hosting the policy on this public site (e.g. `privacy.html`) and relinking — coordinate with the v1.6.2 privacy-policy rewrite in the app repo.
 
 ## Guides (added 2026-09-12 — the GTM's search layer)
