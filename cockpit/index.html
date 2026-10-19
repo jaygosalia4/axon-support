@@ -526,7 +526,7 @@ const T = {
 const MIDNIGHT_FIX_VERSION = '1.9.5';
 // The version live on the App Store — a constant, never max(versions seen),
 // so one TestFlight phone cannot re-label the fleet. Move it at every release.
-const SHIPPED_VERSION = '2.0';
+const SHIPPED_VERSION = '2.1';
 
 // ── Fetch caps ────────────────────────────────────────────────────────────
 const FLEET_PAGE      = 1000;
@@ -662,8 +662,11 @@ const fetchWriteFailures = () => supaFetch('app_logs',
   'select=message,payload,created_at&level=eq.error&message=like.*_failed:*&order=created_at.desc&limit=5000');
 // Roster: the count and the version only. Never a name, never an email.
 const fetchProfiles = () => supaFetch('profiles', 'select=apple_user_id,created_at,app_version&order=created_at.desc');
+// `*` on purpose (Oct 12 2026): `install_id` / `app_version` arrive with
+// Supabase/feedback_anonymous.sql, and a named column the server lacks would turn
+// the whole tile unread until it is applied.
 const fetchFeedback = () => supaFetch('feedback',
-  'select=apple_user_id,category,message,created_at,diagnostics&order=created_at.desc&limit=500');
+  'select=*&order=created_at.desc&limit=500');
 // Written by the `store` feeder (public iTunes lookup, per storefront).
 const fetchStore = () => supaFetch('store_snapshot',
   'select=day,storefront,version,rating_count,avg_rating,text_reviews,taken_at&order=day.desc&limit=400');
@@ -1424,6 +1427,46 @@ function notifTaps(idx, days) {
   }
   return [...m.values()].map(g => ({ kind: g.kind, taps: g.taps, persons: g.ids.size, ids: g.ids })).sort((a, b) => b.taps - a.taps);
 }
+/// Notification reach (2.1.1+, Oct 15 2026): each person active in the window by
+/// their LATEST notif_state — what iOS allows × Axon’s own switch. A nudge
+/// reaches only allowed (or provisional, delivered quietly) with the switch on.
+/// The groups are exclusive and cover every reading the app can send
+/// (`AnalyticsGates.notifStatePayloads`). Asked → allowed is notif_permission,
+/// the answer to the iOS dialog, in the window. No reading = an older build:
+/// out of the denominator, never counted as off.
+const NOTIF_OS = ['allowed', 'provisional', 'denied', 'not_asked', 'ephemeral', 'unknown'];
+const NOTIF_APP = ['on', 'off', 'unset'];
+const notifOn = os => os === 'allowed' || os === 'provisional';
+const NOTIF_GROUPS = [
+  { key: 'reach',     label: 'Allowed, switched on in Axon',        test: s => notifOn(s.os) && s.app === 'on' },
+  { key: 'app_off',   label: 'Allowed, switched off in Axon',       test: s => notifOn(s.os) && s.app === 'off' },
+  { key: 'app_unset', label: 'Allowed, Axon switch not opened yet', test: s => notifOn(s.os) && s.app === 'unset' },
+  { key: 'denied',    label: 'Turned off in iOS',                   test: s => s.os === 'denied' },
+  { key: 'not_asked', label: 'Not asked yet',                       test: s => s.os === 'not_asked' },
+  { key: 'other',     label: 'Other iOS state',                     test: s => s.os === 'ephemeral' || s.os === 'unknown' },
+];
+function notifStateReading(p) {
+  const r = latestRow(p, 'notif_state');
+  if (!r) return null;
+  const t = tokens(r.data);
+  return NOTIF_OS.includes(t.os) && NOTIF_APP.includes(t.app) ? { os: t.os, app: t.app } : null;
+}
+function notifReach(idx, days) {
+  const known = activeList(idx, days).filter(p => notifStateReading(p) !== null);
+  const groups = NOTIF_GROUPS.map(g => ({ key: g.key, label: g.label, ids: idsOf(known.filter(p => g.test(notifStateReading(p)))) }));
+  const reachIds = groups[0].ids;
+  const set = new Set(days);
+  const asked = new Set(), allowed = new Set();
+  for (const p of idx.list) for (const r of p.rows) {
+    if (r.event !== 'notif_permission' || !set.has(r.day)) continue;
+    const g = tokenBool(r.data, 'granted');
+    if (g === null) continue;
+    asked.add(p.id);
+    if (g) allowed.add(p.id);
+  }
+  return { known: known.length, reach: rate(reachIds.size, known.length), reachIds, groups,
+           asked, allowed, answer: rate(allowed.size, asked.size) };
+}
 function campaignId(data) {
   const s = typeof data === 'string' ? data.trim() : '';
   if (!s) return 'unnamed';
@@ -1445,6 +1488,86 @@ function campaigns(idx, days) {
     .sort((a, b) => b.shown - a.shown || a.id.localeCompare(b.id));
 }
 
+// ── 2.1: Ask Axon, the AI connection, Calendar — adoption and use ─────────
+/// Every name here is one the app emits (EventLogService / AnalyticsGates /
+/// AIConnection / CalendarAnalytics). `?selftest` holds the list literally.
+const ASK_AXON_ITEMS = [
+  { key: 'any', label: 'Ran an Ask Axon intent', def: 'intent_run — any kind, from Siri, Shortcuts or Spotlight (2.1+).', test: r => r.event === 'intent_run' },
+];
+/// A payload `kind:<token>`; a missing or odd one is named, never dropped.
+const payloadKind = data => { const k = tokens(data)['kind']; return typeof k === 'string' && /^[a-z_]{1,24}$/.test(k) ? k : 'unrecognised'; };
+/// A bare payload token (`granted`, `ok`) under the same rule.
+const bareToken = data => { const k = typeof data === 'string' ? data.trim() : ''; return /^[a-z_]{1,24}$/.test(k) ? k : 'unrecognised'; };
+/// Runs and distinct people per payload group, one event, one window.
+function eventGroups(idx, days, event, keyOf) {
+  const set = new Set(days);
+  const m = new Map();
+  for (const p of idx.list) for (const r of p.rows) {
+    if (r.event !== event || !set.has(r.day)) continue;
+    const k = keyOf(r.data);
+    const g = m.get(k) || { key: k, runs: 0, ids: new Set() };
+    g.runs++; g.ids.add(p.id); m.set(k, g);
+  }
+  return [...m.values()].map(g => ({ key: g.key, runs: g.runs, persons: g.ids.size, ids: g.ids }))
+    .sort((a, b) => b.persons - a.persons || b.runs - a.runs || a.key.localeCompare(b.key));
+}
+const idsOf = list => new Set(list.map(p => p.id));
+/// A daily device reading, by the person's LATEST one (like the widget).
+/// No reading = the phone never said, so the person is out of the denominator.
+const stateOf = (p, event, allowed) => { const r = latestRow(p, event); if (!r) return null; const v = typeof r.data === 'string' ? r.data.trim() : ''; return allowed.includes(v) ? v : null; };
+const aiStateReading = p => stateOf(p, 'ai_connect_state', ['on', 'off', 'read_only']);
+const calendarStateReading = p => stateOf(p, 'calendar_state', ['on', 'off']);
+/// Ask Axon over a window: people and runs per intent kind. Each kind logs
+/// at most once per day per phone, so runs = person-days.
+function askAxonKinds(idx, days) { return eventGroups(idx, days, 'intent_run', payloadKind); }
+/// The AI connection over a window. Population of the share: people active in
+/// the range whose phone reported ai_connect_state (it only reports while the
+/// feature is switched on in the build).
+function aiUse(idx, days) {
+  const act = activeList(idx, days);
+  const known = act.filter(p => aiStateReading(p) !== null);
+  const by = s => known.filter(p => aiStateReading(p) === s);
+  const on = by('on'), ro = by('read_only'), off = by('off');
+  const conn = [...on, ...ro];
+  const set = new Set(days);
+  const syncers = new Set(), failed = new Set();
+  for (const p of idx.list) for (const r of p.rows) {
+    if (r.event !== 'ai_mirror_sync' || !set.has(r.day)) continue;
+    const t = bareToken(r.data);
+    if (t !== 'ok' && t !== 'failed') continue;
+    syncers.add(p.id);
+    if (t === 'failed') failed.add(p.id);
+  }
+  return {
+    known: known.length, conn: rate(conn.length, known.length), connIds: idsOf(conn),
+    states: { on: idsOf(on), read_only: idsOf(ro), off: idsOf(off) },
+    inbox: eventGroups(idx, days, 'ai_inbox_applied', payloadKind),
+    fail: rate(failed.size, syncers.size), failedIds: failed, syncIds: syncers,
+  };
+}
+/// Calendar over a window: the share switched on (latest calendar_state), the
+/// access outcomes, and the insight lines shown → tapped per kind.
+function calendarUse(idx, days) {
+  const act = activeList(idx, days);
+  const known = act.filter(p => calendarStateReading(p) !== null);
+  const on = known.filter(p => calendarStateReading(p) === 'on');
+  const shown = eventGroups(idx, days, 'calendar_insight_shown', payloadKind);
+  const tapped = new Map(eventGroups(idx, days, 'calendar_insight_tapped', payloadKind).map(g => [g.key, g.ids]));
+  const insights = shown.map(g => {
+    const t = tapped.get(g.key) || new Set();
+    const both = new Set([...t].filter(id => g.ids.has(id)));
+    return { key: g.key, shown: g.persons, runs: g.runs, tapped: both.size, rate: rate(both.size, g.persons), ids: new Set([...g.ids, ...t]) };
+  });
+  const allShown = new Set(shown.flatMap(g => [...g.ids]));
+  const allTapped = new Set([...tapped.values()].flatMap(s => [...s]).filter(id => allShown.has(id)));
+  return {
+    known: known.length, on: rate(on.length, known.length), onIds: idsOf(on),
+    access: eventGroups(idx, days, 'calendar_access', bareToken),
+    insights, anyTap: rate(allTapped.size, allShown.size), allShownIds: allShown, allTappedIds: allTapped,
+  };
+}
+const peopleBy = (cx, ids) => cx.idx.list.filter(p => ids.has(p.id));
+
 // ══ 5. FEEDBACK ═══════════════════════════════════════════════════════════
 function diagVersion(diag) {
   let d = diag;
@@ -1454,8 +1577,10 @@ function diagVersion(diag) {
   return typeof v === 'string' && /^\d+(\.\d+){0,3}$/.test(v) ? v : null;
 }
 /// Every feedback row in the window, newest first, verbatim. The version is
-/// the one the report carried; failing that, the version that account is on
-/// NOW (marked), because a profile only holds its latest.
+/// the one the report carried (its `app_version`, else its diagnostics);
+/// failing that, the version that account is on NOW (marked), because a
+/// profile only holds its latest. Since Oct 12 2026 a report may come with NO
+/// account (`apple_user_id` null, `install_id` set): `account: false`.
 function feedbackRows(fb, profiles, days, f) {
   if (fb === null || fb === undefined) return null;
   const set = new Set(days);
@@ -1466,14 +1591,43 @@ function feedbackRows(fb, profiles, days, f) {
   for (const r of fb) {
     const day = istDay(r.created_at);
     if (!set.has(day)) continue;
-    const own = diagVersion(r.diagnostics);
-    const version = own || profV.get(r.apple_user_id) || null;
+    const carried = typeof r.app_version === 'string' && /^\d+(\.\d+){0,3}$/.test(r.app_version) ? r.app_version : null;
+    const own = carried || diagVersion(r.diagnostics);
+    const account = !!r.apple_user_id;
+    const version = own || (account ? profV.get(r.apple_user_id) : null) || null;
     if (vs && !vs.has(version)) { hidden++; continue; }
     rows.push({ day, ts: r.created_at, category: r.category || 'general', message: String(r.message || ''),
-                version, versionIsNow: !own && !!version, who: anonId(r.apple_user_id) });
+                version, versionIsNow: !own && !!version, account, who: anonId(r.apple_user_id || r.install_id) });
   }
   rows.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
   return { rows, hidden };
+}
+/// The feedback form (Oct 12 2026 — anyone can send, signed in or not): who
+/// opened it, what was sent, what did not go, each split by whether it went
+/// with an account (`signed_in:` on every 2.1 row). A pre-2.1
+/// `feedback_submitted` (a bare category) counts as sent, session unknown — it
+/// is in neither "without an account" count.
+const FEEDBACK_CAUSE_LABEL = {
+  connection: 'no connection', unavailable: 'not on the server yet', limit: 'five-a-day limit',
+  busy: 'too many at once', too_long: 'over 4,000 characters', other: 'other',
+};
+function feedbackForm(idx, days) {
+  const set = new Set(days);
+  const out = { opened: new Set(), openedAnon: new Set(), sent: 0, sentAnon: 0, sentPeople: new Set(),
+                failed: 0, failedPeople: new Set(), causes: Object.create(null) };
+  for (const p of idx.list) for (const r of p.rows) {
+    if (!set.has(r.day)) continue;
+    const anon = tokenBool(r.data, 'signed_in') === false;
+    if (r.event === 'feedback_shown') { out.opened.add(p.id); if (anon) out.openedAnon.add(p.id); }
+    else if (r.event === 'feedback_submitted') { out.sent++; out.sentPeople.add(p.id); if (anon) out.sentAnon++; }
+    else if (r.event === 'feedback_failed') {
+      out.failed++; out.failedPeople.add(p.id);
+      const c = tokens(r.data).cause;
+      const k = c && FEEDBACK_CAUSE_LABEL[c] ? c : 'other';
+      out.causes[k] = (out.causes[k] || 0) + 1;
+    }
+  }
+  return out;
 }
 /// The App Store rating from the newest snapshot day. Counts are per
 /// storefront, so the country filter picks storefronts; the average is
@@ -2110,7 +2264,7 @@ const pctFmt = v => (v === null || v === undefined) ? '—' : `${Math.round(v)}%
 function usageGrid(u, tileId) {
   if (!u.weeks.length) return emptyHtml('No week in this range has anyone active yet.');
   const live = w => !!u.lastDay && weekIsLive(w, u.lastDay);
-  const head = `<tr><th>${escHtml(tileId === 'use.screens' ? 'Screen' : 'Feature')}</th>${u.weeks.map(w => `<th class="num" title="Week of ${escHtml(fmtDay(w))}${live(w) ? ', the week so far' : ''}">${escHtml(fmtDay(w))}${live(w) ? ' <span class="qual">so far</span>' : ''}</th>`).join('')}<th>Trend</th></tr>`;
+  const head = `<tr><th>${escHtml(tileId === 'use.screens' ? 'Screen' : tileId === 'use.askaxon' ? 'Measure' : 'Feature')}</th>${u.weeks.map(w => `<th class="num" title="Week of ${escHtml(fmtDay(w))}${live(w) ? ', the week so far' : ''}">${escHtml(fmtDay(w))}${live(w) ? ' <span class="qual">so far</span>' : ''}</th>`).join('')}<th>Trend</th></tr>`;
   const rows = u.items.map(it => `<tr><td title="${escHtml(it.def || '')}">${escHtml(it.label)}</td>${it.weeks.map((c, i) => {
       const txt = c.rate.known ? (c.rate.directional ? `${c.num}/${c.den}` : `${Math.round(c.rate.pct)}%`) : '—';
       const tip = `${it.label}, week of ${fmtDay(c.week)}: ${c.num} of ${c.den} weekly actives` + (c.rate.directional ? ' — directional' : '');
@@ -2410,6 +2564,36 @@ const TILES = [
     drill(key, cx) { const [, k] = splitKey(key); const g = notifTaps(cx.idx, cx.days).find(x => x.kind === k); return peopleTable(g ? cx.idx.list.filter(p => g.ids.has(p.id)) : [], `Tapped a ${k} notification · ${g ? g.persons : 0} people`); },
   },
   {
+    id: 'use.notifreach', section: 'use', title: 'Notifications — who can get them',
+    def: 'Latest notif_state per person active in the range: iOS permission × Axon’s own switch. Allowed when asked: notif_permission, the iOS dialog’s answer. 2.1.1+.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const n = notifReach(cx.idx, cx.days), tid = this.id;
+      return `<div class="kpis"><div${drillAttr(tid, n.reachIds.size ? 'g|reach' : null, 'Latest reading: allowed in iOS and switched on in Axon')}>${kpi('Can receive', rateVal(n.reach, true), rateSub(n.reach, 'reporting'))}</div>`
+        + `<div${drillAttr(tid, n.asked.size ? 'ask|all' : null, 'People who answered the iOS dialog in this range')}>${kpi('Allowed when asked', rateVal(n.answer, true), rateSub(n.answer, 'asked'))}</div></div>`
+        + barRows(n.groups.filter(g => g.ids.size).map(g => ({ name: g.label, count: g.ids.size, key: g.key })), SERIES[3],
+            { tileId: tid, drill: r => 'g|' + r.key, empty: 'No phone reported its notification setting in this range.', fmt: r => `<b>${r.count}</b> people` })
+        + `<div class="gap-note">A phone with no reading yet (a build before 2.1.1) is left out, not counted as off.</div>`;
+    },
+    table(cx) {
+      const n = notifReach(cx.idx, cx.days);
+      return { cols: [{ key: 'group', label: 'Group' }, { key: 'item', label: 'Item' }, { key: 'people', label: 'People', num: true }],
+               rows: [
+                 ...n.groups.map(g => ({ group: 'Latest reading', item: g.label, people: g.ids.size, _drill: g.ids.size ? 'g|' + g.key : null })),
+                 { group: 'The iOS dialog', item: 'answered', people: n.asked.size, _drill: n.asked.size ? 'ask|all' : null },
+                 { group: 'The iOS dialog', item: 'allowed', people: n.allowed.size, _drill: n.allowed.size ? 'ask|allowed' : null },
+               ] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      const n = notifReach(cx.idx, cx.days);
+      if (k === 'ask') { const ids = v === 'allowed' ? n.allowed : n.asked; return peopleTable(peopleBy(cx, ids), `${v === 'allowed' ? 'Allowed' : 'Answered'} the iOS dialog · ${ids.size} people`); }
+      const g = n.groups.find(x => x.key === v);
+      return peopleTable(g ? peopleBy(cx, g.ids) : [], `${g ? g.label : v} · ${g ? g.ids.size : 0} people`);
+    },
+  },
+  {
     id: 'use.campaigns', section: 'use', title: 'Campaigns — shown → tapped',
     def: 'Per campaign id: people shown the in-app card (promo_shown), people who tapped its button (promo_cta).',
     natural: { days: 30 }, filters: BOTH,
@@ -2427,22 +2611,148 @@ const TILES = [
     drill(key, cx) { const [, id] = splitKey(key); const g = campaigns(cx.idx, cx.days).find(x => x.id === id); return peopleTable(g ? cx.idx.list.filter(p => g.ids.has(p.id)) : [], `Campaign ${id} · shown to ${g ? g.shown : 0}, tapped by ${g ? g.tapped : 0}`); },
   },
 
+  {
+    id: 'use.askaxon', section: 'use', title: 'Ask Axon — Siri and Shortcuts',
+    def: 'People who ran any Ask Axon intent (intent_run) ÷ people active that week. Bars: people per intent kind over the range. 2.1+.',
+    natural: { weeks: 4 }, maxWeeks: 12, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const k = askAxonKinds(cx.idx, cx.days);
+      return usageGrid(usageByWeek(cx.idx, cx.mondays, ASK_AXON_ITEMS), this.id)
+        + `<div class="mini-h" style="margin-top:12px">By intent kind, every day in the range</div>`
+        + barRows(k.map(x => ({ name: x.key, count: x.persons, runs: x.runs })), SERIES[0],
+            { tileId: this.id, drill: r => 'kind|' + r.name, empty: 'No intent was run in this range.',
+              fmt: r => `<b>${r.count}</b> people · ${r.runs} person-days` });
+    },
+    table(cx) {
+      const u = usageTable(usageByWeek(cx.idx, cx.mondays, ASK_AXON_ITEMS));
+      const k = askAxonKinds(cx.idx, cx.days);
+      return { cols: [{ key: 'group', label: 'Group' }, { key: 'item', label: 'Item' }, { key: 'people', label: 'People', num: true }, { key: 'days', label: 'Person-days', num: true }],
+               rows: [...u.rows.map(r => ({ group: 'Last complete week', item: r.label, people: r.people, days: null })),
+                      ...k.map(x => ({ group: 'Intent kind', item: x.key, people: x.persons, days: x.runs, _drill: 'kind|' + x.key }))] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      if (k === 'kind') { const g = askAxonKinds(cx.idx, cx.days).find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Ran the ${v} intent · ${g ? g.persons : 0} people`); }
+      return usageDrill(usageByWeek(cx.idx, cx.mondays, ASK_AXON_ITEMS), key, cx);
+    },
+  },
+  {
+    id: 'use.ai', section: 'use', title: 'AI connection',
+    def: 'Connected = latest ai_connect_state is on or read_only, of people whose phone reported one. Entries assistants logged (ai_inbox_applied) by kind; mirror syncs that failed (ai_mirror_sync). 2.1+.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const a = aiUse(cx.idx, cx.days), tid = this.id;
+      const st = a.states;
+      return `<div class="kpis"><div${drillAttr(tid, a.connIds.size ? 'state|conn' : null, 'People whose latest reading is on or read_only')}>${kpi('Connected', rateVal(a.conn, true), rateSub(a.conn, 'reporting'))}</div>`
+        + `<div${drillAttr(tid, a.failedIds.size ? 'mirror|failed' : null, 'People with at least one failed mirror sync')}>${kpi('Mirror sync failed', rateVal(a.fail, true), rateSub(a.fail, 'syncing'))}</div></div>`
+        + `<div class="mini-h">Entries an assistant logged, by kind</div>`
+        + barRows(a.inbox.map(x => ({ name: x.key, count: x.runs, persons: x.persons })), SERIES[1],
+            { tileId: tid, drill: r => 'inbox|' + r.name, empty: 'No assistant logged an entry in this range.',
+              fmt: r => `<b>${r.count}</b> entries · ${r.persons} people` })
+        + `<div class="gap-note">Of those reporting: <span${drillAttr(tid, st.on.size ? 'state|on' : null, 'Latest reading on')}>full access ${st.on.size}</span> · <span${drillAttr(tid, st.read_only.size ? 'state|read_only' : null, 'Latest reading read_only')}>read only ${st.read_only.size}</span> · <span${drillAttr(tid, st.off.size ? 'state|off' : null, 'Latest reading off')}>off ${st.off.size}</span>. No reading yet is left out, not counted as off.</div>`;
+    },
+    table(cx) {
+      const a = aiUse(cx.idx, cx.days);
+      const d = (n, k) => (n ? k : null);
+      return { cols: [{ key: 'group', label: 'Group' }, { key: 'item', label: 'Item' }, { key: 'people', label: 'People', num: true }, { key: 'entries', label: 'Entries', num: true }],
+               rows: [
+                 ...['on', 'read_only', 'off'].map(s => ({ group: 'Latest reading', item: s, people: a.states[s].size, entries: null, _drill: d(a.states[s].size, 'state|' + s) })),
+                 ...a.inbox.map(x => ({ group: 'Entries by assistants', item: x.key, people: x.persons, entries: x.runs, _drill: 'inbox|' + x.key })),
+                 { group: 'Mirror sync', item: 'failed at least once', people: a.failedIds.size, entries: null, _drill: d(a.failedIds.size, 'mirror|failed') },
+                 { group: 'Mirror sync', item: 'synced at all', people: a.syncIds.size, entries: null, _drill: d(a.syncIds.size, 'mirror|any') },
+               ] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      const a = aiUse(cx.idx, cx.days);
+      if (k === 'state' && v === 'conn') return peopleTable(peopleBy(cx, a.connIds), `Connected (on or read_only) · ${a.connIds.size} people`);
+      if (k === 'state') return peopleTable(peopleBy(cx, a.states[v] || new Set()), `Latest reading ${v} · ${(a.states[v] || new Set()).size} people`);
+      if (k === 'inbox') { const g = a.inbox.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Assistant logged a ${v} · ${g ? g.persons : 0} people`); }
+      if (k === 'mirror') { const ids = v === 'failed' ? a.failedIds : a.syncIds; return peopleTable(peopleBy(cx, ids), `Mirror sync ${v === 'failed' ? 'failed at least once' : 'ran'} · ${ids.size} people`); }
+      return peopleTable([], 'Nothing here');
+    },
+  },
+  {
+    id: 'use.calendar', section: 'use', title: 'Calendar',
+    def: 'On = latest calendar_state is on, of people who reported one. calendar_access outcomes. Insight lines shown (calendar_insight_shown) by kind, and tapped ÷ shown. 2.1+.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const c = calendarUse(cx.idx, cx.days), tid = this.id;
+      return `<div class="kpis"><div${drillAttr(tid, c.onIds.size ? 'on|yes' : null, 'People whose latest reading says on')}>${kpi('Calendar on', rateVal(c.on, true), rateSub(c.on, 'reporting'))}</div>`
+        + `<div${drillAttr(tid, c.allTappedIds.size ? 'tap|any' : null, 'People who tapped an insight line they were shown')}>${kpi('Insight tapped', rateVal(c.anyTap, true), rateSub(c.anyTap, 'shown a line'))}</div></div>`
+        + `<div class="mini-h">Access outcomes</div>`
+        + barRows(c.access.map(x => ({ name: x.key, count: x.persons, runs: x.runs })), SERIES[2],
+            { tileId: tid, drill: r => 'access|' + r.name, empty: 'No access change in this range.', fmt: r => `<b>${r.count}</b> people · ${r.runs} times` })
+        + `<div class="mini-h" style="margin-top:12px">Insight lines shown → tapped</div>`
+        + barRows(c.insights.map(x => ({ name: x.key, count: x.shown, x })), SERIES[3],
+            { tileId: tid, drill: r => 'kind|' + r.name, empty: 'No insight line was shown in this range.',
+              fmt: r => `<b>${r.x.shown}</b> shown · ${escHtml(r.x.rate.text)} tapped${r.x.rate.directional ? ' <span class="qual">directional</span>' : ''}` });
+    },
+    table(cx) {
+      const c = calendarUse(cx.idx, cx.days);
+      return { cols: [{ key: 'group', label: 'Group' }, { key: 'item', label: 'Item' }, { key: 'people', label: 'People', num: true }, { key: 'tapped', label: 'Tapped', num: true }, { key: 'times', label: 'Times', num: true }],
+               rows: [
+                 { group: 'Calendar', item: 'on (latest reading)', people: c.onIds.size, tapped: null, times: null, _drill: c.onIds.size ? 'on|yes' : null },
+                 ...c.access.map(x => ({ group: 'Access', item: x.key, people: x.persons, tapped: null, times: x.runs, _drill: 'access|' + x.key })),
+                 ...c.insights.map(x => ({ group: 'Insight line', item: x.key, people: x.shown, tapped: x.tapped, times: x.runs, _drill: 'kind|' + x.key })),
+               ] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      const c = calendarUse(cx.idx, cx.days);
+      if (k === 'on') return peopleTable(peopleBy(cx, c.onIds), `Calendar on (latest reading) · ${c.onIds.size} people`);
+      if (k === 'tap') return peopleTable(peopleBy(cx, c.allTappedIds), `Tapped an insight line they were shown · ${c.allTappedIds.size} people`);
+      if (k === 'access') { const g = c.access.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Access ${v} · ${g ? g.persons : 0} people`); }
+      if (k === 'kind') { const g = c.insights.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Insight ${v} · shown to ${g ? g.shown : 0}, tapped by ${g ? g.tapped : 0}`); }
+      return peopleTable([], 'Nothing here');
+    },
+  },
+
   // ── 5. FEEDBACK ───────────────────────────────────────────────────────
   {
     id: 'fb.feedback', section: 'fb', wide: true, title: 'What people wrote',
-    def: 'Every in-app feedback message, newest first, word for word. Version is the one the report carried, else the one that account is on now.',
+    def: 'Every in-app feedback message, newest first, word for word, signed in or not. Version is the one the report carried, else the one that account is on now.',
     natural: { all: true }, filters: { version: true, country: false }, nodrill: true,
     view(cx) {
       const fr = feedbackRows(cx.src.feedback, cx.src.profiles, cx.days, cx.f);
       if (!fr) return unreadHtml('feedback', cx.src);
       const open = uiOf(this.id).open;
       const shown = open ? fr.rows : fr.rows.slice(0, 6);
-      const items = shown.map(r => `<li><div class="fb-meta">${escHtml(fmtDay(r.day))} · ${escHtml(r.category)} · ${r.version ? escHtml(r.versionIsNow ? `now on ${r.version}` : r.version) : 'version unknown'}</div><div class="fb-msg">${escHtml(r.message)}</div></li>`).join('');
+      const items = shown.map(r => `<li><div class="fb-meta">${escHtml(fmtDay(r.day))} · ${escHtml(r.category)} · ${r.version ? escHtml(r.versionIsNow ? `now on ${r.version}` : r.version) : 'version unknown'}${r.account ? '' : ' · no account'}</div><div class="fb-msg">${escHtml(r.message)}</div></li>`).join('');
       return (fr.rows.length ? `<ul class="fb">${items}</ul>` : emptyHtml('No feedback in this range.'))
         + (!open && fr.rows.length > shown.length ? `<div class="gap-note">${fr.rows.length - shown.length} more — open the tile to read them all.</div>` : '')
         + (fr.hidden ? `<div class="gap-note">${fr.hidden} ${fr.hidden === 1 ? 'message is' : 'messages are'} hidden by the version filter.</div>` : '');
     },
     table: null,
+  },
+  {
+    id: 'fb.form', section: 'fb', title: 'The feedback form',
+    def: 'feedback_shown, _submitted, _failed (2.1+). Opened counts people; sent and did not go count reports. Anyone can send since 2.1.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const f = feedbackForm(cx.idx, cx.days);
+      const per = cx.days.map(d => feedbackForm({ list: cx.idx.list }, [d]).opened.size);
+      const causes = Object.entries(f.causes).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${FEEDBACK_CAUSE_LABEL[c]} ${fmtInt(n)}`).join(' · ');
+      return `<div class="kpis">${kpi('Opened', fmtInt(f.opened.size), `people · ${fmtInt(f.openedAnon.size)} without an account`)}${kpi('Sent', fmtInt(f.sent), `reports · ${fmtInt(f.sentAnon)} without an account`)}${kpi('Did not go', fmtInt(f.failed), 'tries')}</div>`
+        + columnChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, height: 70, maxTicks: 5, series: [{ name: 'Opened', color: SERIES[3], values: per }], drill: i => per[i] ? dayKey(cx.days[i]) : null, valueLabels: false })
+        + (causes ? `<div class="gap-note">Did not go: ${escHtml(causes)}.</div>` : '');
+    },
+    table(cx) {
+      return { cols: [{ key: 'day', label: 'Day', fmt: fmtDay }, { key: 'opened', label: 'Opened (people)', num: true }, { key: 'sent', label: 'Sent', num: true },
+                      { key: 'sentAnon', label: 'Sent, no account', num: true }, { key: 'failed', label: 'Did not go', num: true }],
+               rows: cx.days.map(d => { const f = feedbackForm({ list: cx.idx.list }, [d]);
+                 return { day: d, opened: f.opened.size, sent: f.sent, sentAnon: f.sentAnon, failed: f.failed, _drill: f.opened.size || f.sent || f.failed ? dayKey(d) : null }; }) };
+    },
+    drill(key, cx) {
+      const [, d] = splitKey(key);
+      const f = feedbackForm({ list: cx.idx.list }, [d]);
+      return peopleTable(cx.idx.list.filter(p => f.opened.has(p.id) || f.sentPeople.has(p.id) || f.failedPeople.has(p.id)),
+                         `The feedback form on ${fmtDay(d)} · ${f.opened.size} people opened it`);
+    },
   },
   {
     id: 'fb.rating', section: 'fb', title: 'App Store rating',
@@ -3056,6 +3366,15 @@ function buildDemo(opts) {
   opts = opts || {};
   const rnd = mulberry32(20260925);
   const pick = arr => arr[Math.floor(rnd() * arr.length)];
+  // The 2.1 events (Ask Axon, AI connection, Calendar) draw from their OWN seeded stream, so
+  // adding them moved nothing the older tiles and checks were built on.
+  const rnd2 = mulberry32(20261009);
+  const pick2 = arr => arr[Math.floor(rnd2() * arr.length)];
+  // The feedback form's events (Oct 12 2026) draw from a THIRD stream, for the same reason.
+  const rnd3 = mulberry32(20261012);
+  const pick3 = arr => arr[Math.floor(rnd3() * arr.length)];
+  // Notification permission (Oct 15 2026, 2.1.1) draws from a FOURTH stream, for the same reason.
+  const rnd4 = mulberry32(20261015);
   const today = opts.today || todayIST();
   const last = lastCompleteDay(today);
   const SPAN = 70;
@@ -3103,6 +3422,13 @@ function buildDemo(opts) {
     const back = p.legacy ? SPAN + 20 + Math.floor(rnd() * 40) : p.reviewer ? 9 : Math.floor(rnd() * SPAN);
     p.installDay = shiftDay(last, -back);
     const activeDays = new Set();
+    // 2.1 traits, all from rnd2: who uses Ask Axon, who has the AI connection (and read-only or
+    // not, from which day), who switched the calendar on, tried and was denied, or revoked later.
+    const t2 = { ask: rnd2() < 0.4, aiFlag: rnd2() < 0.55, aiAdopt: rnd2() < 0.6, aiRO: rnd2() < 0.4,
+                 aiOn: shiftDay(last, -Math.floor(rnd2() * 50)), calOn: rnd2() < 0.35, calTried: rnd2() < 0.2,
+                 calDay: shiftDay(last, -Math.floor(rnd2() * 45)), calRevoke: rnd2() < 0.2, calGranted: false, calDenied: false, calRevoked: false };
+    // Notification permission traits, all from rnd4: asked at all, the answer, Axon’s switch later.
+    const t4 = { asked: rnd4() < 0.8, allowed: rnd4() < 0.7, appOff: rnd4() < 0.12, said: false };
 
     if (!p.legacy) {
       const h0 = 9 + Math.floor(rnd() * 9);
@@ -3179,6 +3505,40 @@ function buildDemo(opts) {
         if (rnd() < 0.3) push(p, day, hour, 'promo_cta', c, 2); else push(p, day, hour, 'promo_dismissed', c, 2);
       }
       if (rnd() < 0.02) push(p, day, hour, 'review_prompt_requested', 'rule:day2');
+      // ── 2.1 (rnd2 only) ──
+      if (t2.ask) for (const [k, w] of [['today', 0.35], ['score', 0.2], ['explain', 0.12], ['checkin', 0.15], ['nap', 0.06], ['brief', 0.1]])
+        if (rnd2() < w) push(p, day, hour, 'intent_run', 'kind:' + k, 10);
+      if (t2.aiFlag) {
+        const aiSt = t2.aiAdopt && day >= t2.aiOn ? (t2.aiRO ? 'read_only' : 'on') : 'off';
+        if (rnd2() < 0.6) push(p, day, hour, 'ai_connect_state', aiSt, 11);
+        if (aiSt !== 'off') {
+          if (rnd2() < 0.2) push(p, day, hour, 'ai_inbox_applied', 'kind:' + pick2(['checkin', 'checkin', 'food', 'food', 'nap']), 12);
+          if (rnd2() < 0.5) push(p, day, hour, 'ai_mirror_sync', rnd2() < 0.12 ? 'failed' : 'ok', 13);
+        }
+      }
+      const calIsOn = t2.calOn && day >= t2.calDay && !(t2.calRevoke && day >= shiftDay(t2.calDay, 20));
+      if (rnd2() < 0.7) push(p, day, hour, 'calendar_state', calIsOn ? 'on' : 'off', 14);
+      if (t2.calOn && day >= t2.calDay && !t2.calGranted) { t2.calGranted = true; push(p, day, hour, 'calendar_access', 'granted', 15); }
+      if (t2.calTried && !t2.calOn && day >= t2.calDay && !t2.calDenied) { t2.calDenied = true; push(p, day, hour, 'calendar_access', 'denied', 15); }
+      if (t2.calOn && t2.calRevoke && day >= shiftDay(t2.calDay, 20) && !t2.calRevoked) { t2.calRevoked = true; push(p, day, hour, 'calendar_access', 'revoked', 15); }
+      if (calIsOn && rnd2() < 0.4) {
+        const ik = pick2(['meetings', 'meetings', 'late', 'early']);
+        push(p, day, hour, 'calendar_insight_shown', 'kind:' + ik, 16);
+        if (rnd2() < 0.25) push(p, day, hour, 'calendar_insight_tapped', 'kind:' + ik, 17);
+      }
+      // ── The feedback form (rnd3 only): anyone can send since 2.1 ──
+      if (rnd3() < 0.04) {
+        const si = 'signed_in:' + (p.signedIn ? 'true' : 'false');
+        push(p, day, hour, 'feedback_shown', si, 18);
+        const r3 = rnd3();
+        if (r3 < 0.45) push(p, day, hour, 'feedback_submitted', pick3(['general', 'bug', 'suggestion', 'other']) + '|' + si, 20);
+        else if (r3 < 0.6) push(p, day, hour, 'feedback_failed', 'cause:' + pick3(['connection', 'unavailable', 'limit', 'other']) + '|' + si, 20);
+      }
+      // ── Notification permission (rnd4 only; 2.1.1) ──
+      if (t4.asked && !t4.said) { t4.said = true; push(p, day, hour, 'notif_permission', 'granted:' + t4.allowed, 21); }
+      const n4os = !t4.said ? 'not_asked' : t4.allowed ? 'allowed' : 'denied';
+      const n4app = !t4.said ? 'unset' : t4.allowed && !t4.appOff ? 'on' : 'off';
+      if (rnd4() < 0.6) push(p, day, hour, 'notif_state', 'os:' + n4os + '|app:' + n4app, 22);
     }
     if (p.signedIn) profiles.push({ apple_user_id: 'u-' + p.pid, created_at: p.installDay + 'T10:00:00Z', app_version: versionOn(last, p.lag, p.frozen) });
   }
@@ -3230,6 +3590,8 @@ function buildDemo(opts) {
     { apple_user_id: 'u-p27', category: 'idea', message: 'Would love a weekly email of the same numbers.\nMaybe on Sundays.', created_at: iso(9 * 24), diagnostics: { appVersion: '1.9.6' } },
     { apple_user_id: 'u-p40', category: 'bug', message: 'Widget showed yesterday’s number until I opened the app.', created_at: iso(18 * 24), diagnostics: { appVersion: '1.9.5' } },
     { apple_user_id: 'u-p51', category: 'general', message: 'How is Readiness different from Recovery?', created_at: iso(40 * 24), diagnostics: null },
+    // Since 2.1 anyone can send: no account, the install's pseudonym, the version it carried.
+    { apple_user_id: null, install_id: 'iid-p08', app_version: '1.9.7', category: 'suggestion', message: 'Let me hide the Food tab.', created_at: iso(1 * 24), diagnostics: null },
   ];
   const store = [
     { day: last, storefront: 'in', version: '1.9.7', rating_count: 4, avg_rating: 5, text_reviews: null, taken_at: iso(6) },
@@ -3526,6 +3888,42 @@ function runSelfTest() {
     ok('feedback: the version filter hides others and counts them', frv.rows.length === 1 && frv.hidden === 1);
     eq('feedback: diagnostics stored as a JSON string still read', diagVersion('{"appVersion":"1.9.4"}'), '1.9.4');
     ok('feedback: the message is verbatim — never trimmed or rewritten', feedbackRows([{ apple_user_id: 'x', message: '  two\nlines  ', created_at: '2026-09-18T05:00:00Z' }], [], ['2026-09-18'], defaultFilters()).rows[0].message === '  two\nlines  ');
+    // Oct 12 2026 — anyone can send: a report with no account reads as one, with the version it carried.
+    const anonFb = feedbackRows([{ apple_user_id: null, install_id: 'iid-1', app_version: '2.1', category: 'bug', message: 'Blank ring', created_at: '2026-09-18T05:00:00Z', diagnostics: null },
+                                 { apple_user_id: 'u9', category: 'bug', message: 'Signed in', created_at: '2026-09-18T04:00:00Z', diagnostics: null }],
+                                [{ apple_user_id: 'u9', app_version: '2.0.1' }], ['2026-09-18'], defaultFilters());
+    ok('feedback: a report with no account says so, keeps its own version, and is never matched to a profile',
+       anonFb.rows[0].account === false && anonFb.rows[0].version === '2.1' && anonFb.rows[0].versionIsNow === false && anonFb.rows[1].account === true && anonFb.rows[1].versionIsNow === true);
+    ok('feedback: a report with no account and no version reads version unknown, not a stranger’s',
+       feedbackRows([{ apple_user_id: null, install_id: 'iid-2', message: 'x', created_at: '2026-09-18T05:00:00Z' }], [{ apple_user_id: null, app_version: '9.9' }], ['2026-09-18'], defaultFilters()).rows[0].version === null);
+    ok('feedback: the tile marks a no-account report on its face', (() => { const t = TILES.find(x => x.id === 'fb.feedback');
+      const d = buildDemo({ today: TODAY, nowMs: NOW }); const b = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, d), defaultFilters(), TODAY, NOW);
+      return /no account/.test(strip(t.view.call(t, tileCtx(t, b)))); })());
+
+    // The feedback form tile (Oct 12 2026): opened = people, sent / did not go = reports, split by account.
+    const FB = buildIndex([
+      fe('a', '2026-09-18', 'feedback_shown', 'signed_in:false'), fe('a', '2026-09-18', 'feedback_submitted', 'bug|signed_in:false'),
+      fe('a', '2026-09-18', 'feedback_shown', 'signed_in:false'),
+      fe('b', '2026-09-18', 'feedback_shown', 'signed_in:true'), fe('b', '2026-09-18', 'feedback_submitted', 'general|signed_in:true'),
+      fe('c', '2026-09-18', 'feedback_shown', 'signed_in:false'), fe('c', '2026-09-18', 'feedback_failed', 'cause:unavailable|signed_in:false'),
+      fe('c', '2026-09-18', 'feedback_failed', 'cause:something_new|signed_in:false'),
+      fe('d', '2026-09-18', 'feedback_submitted', 'bug'),
+      fe('e', '2026-09-10', 'feedback_shown', 'signed_in:false'),
+    ]);
+    const ff = feedbackForm(FB, ['2026-09-18']);
+    eq('feedback form: opened counts people, not opens', [ff.opened.size, ff.openedAnon.size], [3, 2]);
+    eq('feedback form: sent counts reports; a pre-2.1 bare category is sent, session unknown', [ff.sent, ff.sentAnon], [3, 1]);
+    eq('feedback form: did not go counts tries, by cause; an unknown cause is other', [ff.failed, ff.causes.unavailable, ff.causes.other], [2, 1, 1]);
+    eq('feedback form: outside the window counts nothing', feedbackForm(FB, ['2026-09-17']).opened.size, 0);
+    const fbForm = TILES.find(t => t.id === 'fb.form');
+    ok('feedback form: the tile sits after What people wrote, honours both filters, has a drill and a table',
+       !!fbForm && TILES.indexOf(fbForm) === TILES.findIndex(t => t.id === 'fb.feedback') + 1 && fbForm.filters.version === true && fbForm.filters.country === true
+       && typeof fbForm.drill === 'function' && typeof fbForm.table === 'function' && !/\n/.test(fbForm.def) && fbForm.def.length <= 200);
+    const FB_EVENTS = ['feedback_shown', 'feedback_submitted', 'feedback_failed'];
+    const fbNamed = [...new Set((String(feedbackForm).match(/'(feedback_[a-z_]+)'/g) || []).map(x => x.slice(1, -1)))].sort();
+    eq('feedback form: the reducer names exactly the app’s three events (EventLogService.EventType)', fbNamed, [...FB_EVENTS].sort());
+    eq('feedback form: the cause labels are the app’s closed vocabulary (FeedbackSubmission.Outcome.causeToken)',
+       Object.keys(FEEDBACK_CAUSE_LABEL).sort(), ['busy', 'connection', 'limit', 'other', 'too_long', 'unavailable']);
 
     const store = [
       { day: '2026-09-18', storefront: 'in', rating_count: 4, avg_rating: 5, version: '1.9.7' },
@@ -3741,6 +4139,120 @@ function runSelfTest() {
     const d1 = pooledRetention(pB.idx, dayCx.days, 1);
     ok('moved from the strip: day 1 return is a tile, with its n', d1.den > 0 && strip(days.view.call(days, dayCx)).includes(rateSub(d1.rate, 'installs')));
     eq('moved from the strip: the day-1 drill opens exactly the people it counts', days.drill('ret|1', dayCx).rows.length, d1.num);
+  }
+
+  // ── P2. 2.1 tiles: Ask Axon, the AI connection, Calendar (history only) ─
+  {
+    const IDS = ['use.askaxon', 'use.ai', 'use.calendar'];
+    const EVENTS_21 = ['intent_run', 'ai_connect_state', 'ai_inbox_applied', 'ai_mirror_sync', 'calendar_access', 'calendar_state', 'calendar_insight_shown', 'calendar_insight_tapped'];
+    const VOCAB = {
+      intent_run: ['kind:today', 'kind:score', 'kind:explain', 'kind:checkin', 'kind:nap', 'kind:brief'],
+      ai_connect_state: ['on', 'off', 'read_only'], ai_inbox_applied: ['kind:checkin', 'kind:food', 'kind:nap'], ai_mirror_sync: ['ok', 'failed'],
+      calendar_access: ['granted', 'denied', 'revoked'], calendar_state: ['on', 'off'],
+      calendar_insight_shown: ['kind:meetings', 'kind:late', 'kind:early'], calendar_insight_tapped: ['kind:meetings', 'kind:late', 'kind:early'],
+    };
+    const tiles = IDS.map(id => TILES.find(t => t.id === id));
+    ok('2.1 tiles: all three are in the registry, in the What they use section, after the campaigns tile',
+       tiles.every(t => t && t.section === 'use') && TILES.findIndex(t => t.id === 'use.campaigns') < TILES.indexOf(tiles[0]) && TILES.indexOf(tiles[2]) < TILES.findIndex(t => t.id === 'fb.feedback'));
+    ok('2.1 tiles: each has a one-line definition of 200 characters or fewer, a natural window, both filters declared, a drill and a table',
+       tiles.every(t => t && !/\n/.test(t.def) && t.def.length <= 200 && !!t.natural && typeof t.filters.version === 'boolean' && typeof t.filters.country === 'boolean' && typeof t.drill === 'function' && typeof t.table === 'function'));
+    ok('2.1 tiles: they honour both filters (the filter law above then proves each one changes)', tiles.every(t => t.filters.version === true && t.filters.country === true));
+
+    // The names the tiles count are the names the app emits (EventLogService.EventType, Sep 26 lesson).
+    const srcText = [askAxonKinds, aiUse, calendarUse, aiStateReading, calendarStateReading].map(f => String(f)).join('\n') + JSON.stringify(ASK_AXON_ITEMS.map(i => String(i.test)));
+    const named = [...new Set((srcText.match(/'((?:intent|ai|calendar)_[a-z_]+)'/g) || []).map(x => x.slice(1, -1)))].sort();
+    eq('2.1 events: the reducers name exactly the app’s event names, no others', named, [...EVENTS_21].sort());
+    const rToday = todayIST();
+    const rDemo = buildDemo({ today: rToday, nowMs: NOW });
+    const rB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, rDemo), defaultFilters(), rToday, NOW);
+    const fam = rDemo.fleet.filter(r => /^(intent|ai|calendar)_/.test(r.event));
+    ok('2.1 events: the demo emits only those names, all of them', fam.every(r => EVENTS_21.includes(r.event)) && EVENTS_21.every(e => fam.some(r => r.event === e)));
+    ok('2.1 events: every demo payload is in the app’s closed vocabulary', fam.every(r => VOCAB[r.event].includes(r.data)));
+
+    // Reducers on a hand-built warehouse.
+    const R1 = buildIndex([
+      fe('a', '2026-09-15', 'intent_run', 'kind:today'), fe('a', '2026-09-16', 'intent_run', 'kind:today'), fe('b', '2026-09-16', 'intent_run', 'kind:nap'), fe('c', '2026-09-16', 'intent_run', 'oops'),
+      fe('a', '2026-09-15', 'ai_connect_state', 'off', { ts: '2026-09-15T05:00:00Z' }), fe('a', '2026-09-17', 'ai_connect_state', 'on', { ts: '2026-09-17T05:00:00Z' }),
+      fe('b', '2026-09-16', 'ai_connect_state', 'read_only'), fe('c', '2026-09-16', 'ai_connect_state', 'off'), fe('d', '2026-09-16', 'tab_viewed', 'body'),
+      fe('a', '2026-09-17', 'ai_inbox_applied', 'kind:food'), fe('a', '2026-09-17', 'ai_inbox_applied', 'kind:food'), fe('b', '2026-09-17', 'ai_inbox_applied', 'kind:nap'),
+      fe('a', '2026-09-17', 'ai_mirror_sync', 'ok'), fe('a', '2026-09-17', 'ai_mirror_sync', 'failed'), fe('b', '2026-09-17', 'ai_mirror_sync', 'ok'),
+      fe('a', '2026-09-16', 'calendar_state', 'off', { ts: '2026-09-16T05:00:00Z' }), fe('a', '2026-09-17', 'calendar_state', 'on', { ts: '2026-09-17T05:00:00Z' }), fe('b', '2026-09-16', 'calendar_state', 'off'),
+      fe('a', '2026-09-17', 'calendar_access', 'granted'), fe('b', '2026-09-17', 'calendar_access', 'denied'),
+      fe('a', '2026-09-17', 'calendar_insight_shown', 'kind:meetings'), fe('b', '2026-09-17', 'calendar_insight_shown', 'kind:meetings'),
+      fe('a', '2026-09-17', 'calendar_insight_tapped', 'kind:meetings'), fe('c', '2026-09-17', 'calendar_insight_tapped', 'kind:meetings'),
+    ], [], TODAY);
+    const rd = completeDays(TODAY, 7);
+    eq('askaxon: people and runs per kind; an odd payload is named, not dropped', askAxonKinds(R1, rd).map(x => [x.key, x.persons, x.runs]), [['today', 1, 2], ['nap', 1, 1], ['unrecognised', 1, 1]]);
+    const u1 = aiUse(R1, rd);
+    eq('ai: Connected counts the LATEST reading, and only people who reported one', [u1.conn.text, u1.known], ['2 of 3', 3]);
+    eq('ai: entries by assistants, by kind', u1.inbox.map(x => [x.key, x.persons, x.runs]), [['food', 1, 2], ['nap', 1, 1]]);
+    eq('ai: mirror failures are people with at least one failed sync ÷ people who synced', u1.fail.text, '1 of 2');
+    const c1 = calendarUse(R1, rd);
+    eq('calendar: on is the latest reading', c1.on.text, '1 of 2');
+    eq('calendar: access outcomes by people', c1.access.map(x => [x.key, x.persons]), [['denied', 1], ['granted', 1]]);
+    eq('calendar: tapped ÷ shown counts only people who were shown the line', [c1.insights[0].tapped, c1.insights[0].shown, c1.insights[0].rate.text], [1, 2, '1 of 2']);
+    const e1 = buildIndex([fe('z', '2026-09-17', 'tab_viewed', 'body')], [], TODAY);
+    eq('absent is a gap, never a zero: no readings, no events', [aiUse(e1, rd).conn.text, aiUse(e1, rd).fail.text, calendarUse(e1, rd).on.text, calendarUse(e1, rd).anyTap.text, askAxonKinds(e1, rd).length], ['—', '—', '—', '—', 0]);
+    const many = [];
+    for (let i = 0; i < 24; i++) { many.push(fe('m' + i, '2026-09-16', 'ai_connect_state', i < 6 ? 'on' : 'off')); }
+    eq('ai: at 20 or more reporting the share is a percentage (the n rule)', aiUse(buildIndex(many, [], TODAY), rd).conn.text, '25%');
+
+    // Faces and drills on the demo.
+    const faces = tiles.map(t => ({ id: t.id, h: t.view.call(t, tileCtx(t, rB)) }));
+    ok('2.1 tiles: each draws on the demo and none says it could not be drawn', faces.every(f => f.h.length > 200) && tiles.every(t => !/could not be drawn/.test(tileHtml(t, rB))));
+    const keysOf = h => [...h.matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').split('::')[1]);
+    const badD = [];
+    for (const t of tiles) {
+      const cx = tileCtx(t, rB);
+      const viewKeys = keysOf(t.view.call(t, cx));
+      const tableKeys = t.table(cx).rows.map(r => r._drill).filter(Boolean);
+      if (viewKeys.length < 3) badD.push(`${t.id}: only ${viewKeys.length} drill targets on its face`);
+      for (const k of [...viewKeys, ...tableKeys]) { const d = t.drill.call(t, k, cx); if (!d || !d.rows.length) badD.push(`${t.id} ${k}`); }
+    }
+    eq('2.1 drills: every target on each new tile (face and table) opens a non-empty slice', badD.slice(0, 5), []);
+    ok('2.1 drills: the people shown are anonymous hashes only', tiles.every(t => { const cx = tileCtx(t, rB); const k = keysOf(t.view.call(t, cx))[0]; return t.drill.call(t, k, cx).rows.every(r => /^#[0-9a-f]{7}$/.test(r.who)); }));
+    const txt = tiles.map(t => t.title + ' ' + t.def + ' ' + strip(tileHtml(t, rB)) + ' ' + strip(JSON.stringify(t.table(tileCtx(t, rB)).rows))).join(' ');
+    eq('D-37: no verdict, target, goal, kill, pace or projection word in the new tiles', (txt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|watch|late after|nothing to decide)\b/i) || [null])[0], null);
+    ok('D-37: the new tiles print no threshold, only counts and shares', !/(?:above|below|over|under) \d+ ?%/.test(txt));
+  }
+
+  // ── P3. Notification reach (2.1.1, Oct 15 2026) ─────────────────────────
+  {
+    const N1 = buildIndex([
+      fe('a', '2026-09-15', 'notif_state', 'os:not_asked|app:unset', { ts: '2026-09-15T05:00:00Z' }), fe('a', '2026-09-17', 'notif_state', 'os:allowed|app:on', { ts: '2026-09-17T05:00:00Z' }),
+      fe('b', '2026-09-16', 'notif_state', 'os:denied|app:off'), fe('c', '2026-09-16', 'notif_state', 'os:allowed|app:off'),
+      fe('d', '2026-09-16', 'tab_viewed', 'body'), fe('e', '2026-09-16', 'notif_state', 'os:maybe|app:on'), fe('f', '2026-09-16', 'notif_state', 'os:provisional|app:on'),
+      fe('a', '2026-09-15', 'notif_permission', 'granted:true'), fe('b', '2026-09-15', 'notif_permission', 'granted:false'),
+      fe('c', '2026-09-16', 'notif_permission', 'granted:true'), fe('g', '2026-09-16', 'notif_permission', 'granted:oops'),
+    ], [], TODAY);
+    const nd = completeDays(TODAY, 7);
+    const n1 = notifReach(N1, nd);
+    eq('notif reach: can receive counts the LATEST reading, allowed or provisional with the switch on, of people who reported one', [n1.reach.text, n1.known], ['2 of 4', 4]);
+    eq('notif reach: the groups hold each person once, by their latest reading', n1.groups.map(g => [g.key, [...g.ids].sort().join()]),
+       [['reach', 'a,f'], ['app_off', 'c'], ['app_unset', ''], ['denied', 'b'], ['not_asked', ''], ['other', '']]);
+    eq('notif reach: allowed when asked = people who said yes ÷ people who answered; an odd payload is not an answer', [n1.answer.text, n1.asked.size, n1.allowed.size], ['2 of 3', 3, 2]);
+    eq('notif reach: absent is a gap, never a zero', [notifReach(buildIndex([fe('z', '2026-09-17', 'tab_viewed', 'body')], [], TODAY), nd).reach.text, notifReach(buildIndex([fe('z', '2026-09-17', 'tab_viewed', 'body')], [], TODAY), nd).answer.text], ['—', '—']);
+    eq('notif reach: the vocabulary is the app’s (AnalyticsGates.NotifOS × the switch)', [[...NOTIF_OS].sort(), NOTIF_APP], [['allowed', 'denied', 'ephemeral', 'not_asked', 'provisional', 'unknown'], ['on', 'off', 'unset']]);
+    ok('notif reach: every reading the app can send lands in exactly one group', NOTIF_OS.every(os => NOTIF_APP.every(app => NOTIF_GROUPS.filter(g => g.test({ os, app })).length === 1)));
+    const nt = TILES.find(t => t.id === 'use.notifreach');
+    ok('notif reach: the tile sits after the taps tile, honours both filters, has a drill and a table',
+       !!nt && TILES.indexOf(nt) === TILES.findIndex(t => t.id === 'use.notifs') + 1 && nt.filters.version === true && nt.filters.country === true
+       && typeof nt.drill === 'function' && typeof nt.table === 'function');
+    const nToday = todayIST();
+    const nDemo = buildDemo({ today: nToday, nowMs: NOW });
+    const nB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, nDemo), defaultFilters(), nToday, NOW);
+    const nFam = nDemo.fleet.filter(r => /^notif_(state|permission)$/.test(r.event));
+    ok('notif reach: the demo emits both events, every payload in the app’s closed vocabulary',
+       nFam.some(r => r.event === 'notif_state') && nFam.some(r => r.event === 'notif_permission')
+       && nFam.every(r => r.event === 'notif_permission' ? /^granted:(true|false)$/.test(r.data) : notifStateReading({ rows: [r] }) !== null));
+    const ncx = tileCtx(nt, nB);
+    const nFace = nt.view.call(nt, ncx);
+    ok('notif reach: the tile draws on the demo', nFace.length > 200 && !/could not be drawn/.test(tileHtml(nt, nB)));
+    const nKeys = [...nFace.matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').split('::')[1]);
+    const nBad = [...nKeys, ...nt.table(ncx).rows.map(r => r._drill).filter(Boolean)].filter(k => { const d = nt.drill.call(nt, k, ncx); return !d || !d.rows.length; });
+    ok('notif reach: at least three drill targets on its face, and every one (face and table) opens a non-empty slice', nKeys.length >= 3 && !nBad.length);
+    const nTxt = nt.title + ' ' + nt.def + ' ' + strip(tileHtml(nt, nB)) + ' ' + strip(JSON.stringify(nt.table(ncx).rows));
+    eq('D-37: no verdict, target, goal, kill, pace or projection word in the notification tile', (nTxt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|watch|late after|nothing to decide)\b/i) || [null])[0], null);
   }
 
   // ── Q. Copy and structure law ───────────────────────────────────────────
