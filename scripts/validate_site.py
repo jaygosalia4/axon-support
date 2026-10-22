@@ -44,27 +44,36 @@ MONTHS = {m: i for i, m in enumerate(
     ["January", "February", "March", "April", "May", "June", "July",
      "August", "September", "October", "November", "December"], 1)}
 
-# Medical-claim words. A word is allowed only as a disclaimer, i.e. with a
-# negation shortly before it ("not a diagnosis", "don't diagnose").
+# Medical-claim words. A word is allowed only as a disclaimer: a negation
+# within the four words before it, in the same clause ("not a diagnosis",
+# "don't diagnose", "None of these scores diagnose").
 NEGATIONS = {"not", "no", "never", "none", "nor", "without", "don't", "doesn't",
              "isn't", "aren't", "won't", "can't", "cannot", "neither"}
+CLAUSE_BREAK = re.compile(r"[.;:!?,()\u2014\u2013]|\s-\s|\b(but|yet|although|though|however)\b", re.I)
 CONDITIONS = (r"illness(es)?|diseases?|conditions?|disorders?|insomnia|apnoea|apnea|"
-              r"depression|anxiety|symptoms?|injur(y|ies)|infections?|afib|arrhythmias?")
+              r"depression|anxiety|symptoms?|injur(y|ies)|infections?|afib|arrhythmias?|"
+              r"flu|covid|blood pressure|hypertension|diabetes|cancer")
 MEDICAL_PATTERNS = [
-    ("diagnose", re.compile(r"\bdiagnos(e|es|ed|ing|is|es|tic|tics)\b", re.I)),
+    ("diagnose", re.compile(r"\bdiagnos(e|es|ed|ing|is|tic|tics)\b", re.I)),
     ("cure", re.compile(r"\bcur(e|es|ed|ing)\b", re.I)),
+    ("heal", re.compile(r"\bheal(s|ed|ing)?\b", re.I)),
     ("treatment", re.compile(r"\btreatments?\b", re.I)),
-    ("treat <condition>", re.compile(
-        r"\btreat(s|ed|ing)?\s+(\w+\s+){0,3}?(" + CONDITIONS + r")\b", re.I)),
+    # "treat" is fine only as the idiom "treat X as Y" or "treated differently".
+    ("treat", re.compile(r"\btreat(s|ed|ing)?\b(?!\s+differently)(?!(\s+[\w'\u2019-]+){0,5}\s+as\b)", re.I)),
     ("prevent <condition>", re.compile(
         r"\bprevent(s|ed|ing)?\s+(\w+\s+){0,3}?(" + CONDITIONS + r")\b", re.I)),
+    ("detect <condition>", re.compile(
+        r"\b(detect|spot|predict)(s|ed|ing)?\s+(\w+\s+){0,3}?(" + CONDITIONS + r")\b", re.I)),
     ("medical device", re.compile(r"\bmedical[- ](device|grade)\b", re.I)),
     ("clinically proven", re.compile(r"\bclinically[- ](proven|validated|tested)\b", re.I)),
     ("FDA approved", re.compile(r"\bFDA[- ](approved|cleared)\b", re.I)),
 ]
-# Decision D-07: no founder name anywhere. Word boundaries keep the
-# "jaygosalia4" in the site's own address from matching.
-FOUNDER = re.compile(r"\b(jay|gosalia)\b", re.I)
+# Decision D-07: no founder name anywhere in a public page's source
+# (text, attributes, comments). The GitHub handle in the site's own
+# addresses (jaygosalia4.github.io, github.com/jaygosalia4) is stripped first.
+SITE_HANDLE = re.compile(r"jaygosalia4", re.I)
+FOUNDER = re.compile(r"(jay|gosalia)", re.I)
+SCANNED_ATTRS = ("alt", "title", "aria-label", "content", "placeholder")
 NON_USD = re.compile(r"[£€₹¥]|\b(GBP|EUR|INR|AUD|CAD)\b")
 
 
@@ -80,7 +89,12 @@ class Page(HTMLParser):
         self.jsonld = []         # raw strings
         self.text = []           # visible text chunks
         self.related_hrefs = []
+        self.attr_text = []      # alt/title/aria-label/... values
+        self.sources_text = []   # text inside the Sources list (citations)
+        self.head_metas = []     # metas seen inside <head>
         self.lang = None
+        self._in_head = False
+        self._sources_depth = None
         self._stack = []
         self._in = {"title": 0, "script": 0, "style": 0, "h1": 0}
         self._jsonld_buf = None
@@ -91,10 +105,19 @@ class Page(HTMLParser):
         a = dict(attrs)
         if tag == "html":
             self.lang = a.get("lang")
+        if tag == "head":
+            self._in_head = True
+        elif tag == "body":
+            self._in_head = False
+        for k in SCANNED_ATTRS:
+            if a.get(k) and not (tag == "meta" and k == "content"):
+                self.attr_text.append(a[k])
         if "id" in a:
             self.ids.add(a["id"])
         if tag == "meta":
             self.metas.append(a)
+            if self._in_head:
+                self.head_metas.append(a)
         elif tag == "link":
             self.links.append(a)
         elif tag == "a" and "href" in a:
@@ -104,8 +127,11 @@ class Page(HTMLParser):
         if tag in ("meta", "link", "br", "img", "input", "hr"):
             return
         self._stack.append(tag)
-        if tag == "div" and "related" in (a.get("class") or "").split():
+        classes = (a.get("class") or "").split()
+        if "related" in classes and self._related_depth is None:
             self._related_depth = len(self._stack)
+        if "sources" in classes and self._sources_depth is None:
+            self._sources_depth = len(self._stack)
         if tag in self._in:
             self._in[tag] += 1
         if tag == "script" and a.get("type") == "application/ld+json":
@@ -116,6 +142,8 @@ class Page(HTMLParser):
     def handle_endtag(self, tag):
         if tag in ("meta", "link", "br", "img", "input", "hr"):
             return
+        if tag == "head":
+            self._in_head = False
         if tag in self._in and self._in[tag]:
             self._in[tag] -= 1
         if tag == "script" and self._jsonld_buf is not None:
@@ -127,6 +155,8 @@ class Page(HTMLParser):
         if self._stack and self._stack[-1] == tag:
             if self._related_depth == len(self._stack):
                 self._related_depth = None
+            if self._sources_depth == len(self._stack):
+                self._sources_depth = None
             self._stack.pop()
 
     def handle_data(self, data):
@@ -141,12 +171,24 @@ class Page(HTMLParser):
         if self._h1_buf is not None:
             self._h1_buf.append(data)
         self.text.append(data)
+        if self._sources_depth is not None:
+            self.sources_text.append(data)
 
     def meta(self, key, value):
         return [m.get("content", "") for m in self.metas if m.get(key) == value]
 
     def visible_text(self):
         return " ".join(" ".join(self.text).split())
+
+    def prose_text(self):
+        """Visible text minus the Sources list: cited titles are other
+        people's words (a paper on HRV in anxiety treatment is fine to cite)."""
+        text = self.visible_text()
+        for chunk in self.sources_text:
+            chunk = " ".join(chunk.split())
+            if chunk:
+                text = text.replace(chunk, " ", 1)
+        return text
 
 
 def rel(path):
@@ -202,26 +244,45 @@ def graph_items(data):
 
 
 def medical_hits(text):
-    hits = []
-    for label, pat in MEDICAL_PATTERNS:
-        for m in pat.finditer(text):
-            before = re.findall(r"[\w']+", text[max(0, m.start() - 80):m.start()].lower())[-5:]
-            before = [w.replace("’", "'") for w in before]
-            if NEGATIONS.intersection(before):
-                continue
-            hits.append(f'{label}: "…{text[max(0, m.start() - 40):m.end() + 20]}…"')
+    matches = sorted({(m.start(), m.end(), label) for label, pat in MEDICAL_PATTERNS for m in pat.finditer(text)})
+    hits, negated_end = [], None
+    for start, end, label in matches:
+        # A word listed after a negated one keeps the negation:
+        # "does not diagnose, treat or cure".
+        if negated_end is not None and re.fullmatch(r"\s*(,|,?\s*(or|and|nor))\s*", text[negated_end:start]):
+            negated_end = end
+            continue
+        clause = CLAUSE_BREAK.split(text[max(0, start - 120):start])[-1]
+        before = [w.replace("\u2019", "'") for w in re.findall(r"[\w'\u2019]+", clause.lower())[-4:]]
+        if NEGATIONS.intersection(before):
+            negated_end = end
+            continue
+        negated_end = None
+        hits.append(f'{label}: "…{text[max(0, start - 40):end + 20]}…"')
     return hits
 
 
+def same_words(s):
+    """Compare FAQ text the way a reader sees it: curly and straight quotes alike."""
+    return " ".join(s.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"').replace("\u201d", '"').split())
+
+
 def visible_date(text):
-    m = re.search(r"\b(Updated|Published) (\d{1,2}) (" + "|".join(MONTHS) + r") (\d{4})", text)
+    """The page's "Updated 16 September 2026" / "Published ..." line.
+    Returns (iso_date or None, raw phrase or None)."""
+    m = re.search(r"\b(?:last )?(?:updated|published)\b[^·<]{0,40}", text, re.I)
     if not m:
-        return None
-    return datetime.date(int(m.group(4)), MONTHS[m.group(3)], int(m.group(2))).isoformat()
+        return None, None
+    d = re.match(r"(?:last )?(?:updated|published) (\d{1,2}) (" + "|".join(MONTHS) + r") (\d{4})\b",
+                 m.group(0), re.I)
+    if not d:
+        return None, m.group(0).strip()
+    month = MONTHS[d.group(2).capitalize()]
+    return datetime.date(int(d.group(3)), month, int(d.group(1))).isoformat(), m.group(0).strip()
 
 
 def main():
-    failures, notes = [], []
+    failures = []
     today = datetime.date.today()
 
     html_files = []
@@ -234,8 +295,12 @@ def main():
 
     pages = {}
     for r in html_files:
-        with open(os.path.join(ROOT, r), encoding="utf-8") as fh:
-            raw = fh.read()
+        try:
+            with open(os.path.join(ROOT, r), encoding="utf-8") as fh:
+                raw = fh.read()
+        except UnicodeDecodeError as e:
+            failures.append(f"{r}: not valid UTF-8 ({e})")
+            continue
         p = Page()
         p.feed(raw)
         p.raw = raw
@@ -262,16 +327,22 @@ def main():
         public.append(r)
 
     # --- sitemap
-    sm = ET.parse(os.path.join(ROOT, "sitemap.xml"))
     ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
     lastmod = {}
-    for u in sm.getroot().findall("s:url", ns):
+    try:
+        sm_urls = ET.parse(os.path.join(ROOT, "sitemap.xml")).getroot().findall("s:url", ns)
+    except (OSError, ET.ParseError) as e:
+        failures.append(f"sitemap.xml: cannot be read ({e})")
+        sm_urls = []
+    for u in sm_urls:
         loc = u.findtext("s:loc", default="", namespaces=ns).strip()
         lm = u.findtext("s:lastmod", default="", namespaces=ns).strip()
         f = file_for(loc)
         if f is None or f not in pages:
             failures.append(f"sitemap.xml: {loc} does not match a page in the repo")
             continue
+        if loc != url_for(f):
+            failures.append(f"sitemap.xml: {loc} should be written as its canonical {url_for(f)}")
         if f in lastmod:
             failures.append(f"sitemap.xml: {loc} is listed twice")
         try:
@@ -323,11 +394,17 @@ def main():
             fail(r, f"needs exactly one canonical link (found {len(canon)})")
         elif canon[0] != url:
             fail(r, f"canonical {canon[0]} should be {url}")
+        og_url = p.meta("property", "og:url")
+        if og_url and og_url != [url]:
+            fail(r, f"og:url {og_url} should be the canonical {url}")
         banners = p.meta("name", "apple-itunes-app")
-        if banners != [BANNER]:
+        head_banners = [m.get("content", "") for m in p.head_metas if m.get("name") == "apple-itunes-app"]
+        if len(banners) != 1 or not re.fullmatch(re.escape(BANNER) + r"(\s*,.*)?", banners[0].strip()):
             fail(r, f'Smart App Banner should be exactly one <meta name="apple-itunes-app" content="{BANNER}"> (found {banners})')
+        elif len(head_banners) != 1:
+            fail(r, "Smart App Banner must sit inside <head>")
         for href in p.hrefs:
-            m = re.search(r"apps\.apple\.com/app/apple-store/id(\d+)", href)
+            m = re.search(r"apps\.apple\.com/(?:[a-z]{2}/)?app/(?:apple-store|axon[^/]*)/id(\d+)", href)
             if m and m.group(1) != APP_ID:
                 fail(r, f"Axon App Store link uses id{m.group(1)}, banner uses id{APP_ID}")
         if p.size > MAX_HTML_BYTES:
@@ -366,34 +443,49 @@ def main():
                     fail(r, f"Article {who} must be the Organization 'Axon', not a person")
             if article.get("mainEntityOfPage") and article["mainEntityOfPage"] != url:
                 fail(r, f"Article mainEntityOfPage should be {url}")
-            dm = article.get("dateModified", "")
+            dm, dp = str(article.get("dateModified", "")), str(article.get("datePublished", ""))
+            for k, v in (("datePublished", dp), ("dateModified", dm)):
+                if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+                    fail(r, f"Article {k} '{v}' is not a YYYY-MM-DD date")
             if r in lastmod and dm and lastmod[r] != dm:
                 fail(r, f"sitemap lastmod {lastmod[r]} != JSON-LD dateModified {dm}")
-            vd = visible_date(text)
-            if vd and dm and vd != dm:
-                fail(r, f"visible date {vd} != JSON-LD dateModified {dm}")
-            if article.get("datePublished", "") > dm:
+            if dp > dm:
                 fail(r, "datePublished is after dateModified")
+        if kind in ("guide", "ai"):
+            vd, phrase = visible_date(text)
+            if phrase is None:
+                fail(r, 'no visible "Updated D Month YYYY" (or "Published …") line')
+            elif vd is None:
+                fail(r, f'visible date "{phrase}" should read like "Updated 16 September 2026"')
+            elif article and vd != str(article.get("dateModified", "")):
+                fail(r, f"visible date {vd} != JSON-LD dateModified {article.get('dateModified')}")
         if faq:
-            qs = [q.get("name", "") for q in faq.get("mainEntity", [])]
-            if not qs:
+            entries = faq.get("mainEntity", [])
+            entries = [entries] if isinstance(entries, dict) else entries if isinstance(entries, list) else []
+            entries = [e for e in entries if isinstance(e, dict)]
+            if not entries:
                 fail(r, "FAQPage has no questions")
-            for q in qs:
-                if not q or " ".join(q.split()) not in text:
+            for e in entries:
+                q = str(e.get("name", ""))
+                if not q or same_words(q) not in same_words(text):
                     fail(r, f'FAQ question not visible on the page: "{q}"')
-                a = next((x.get("acceptedAnswer", {}).get("text") for x in faq["mainEntity"] if x.get("name") == q), None)
-                if not a:
+                ans = e.get("acceptedAnswer")
+                if not (isinstance(ans, dict) and ans.get("text")):
                     fail(r, f'FAQ question has no answer text: "{q}"')
 
         # Words that must never appear
         meta_text = " ".join([title] + descs + p.meta("property", "og:title") + p.meta("property", "og:description"))
-        for where, blob in (("page", text), ("meta", meta_text), ("JSON-LD", " ".join(ld_strings))):
+        for where, blob in (("page", p.prose_text()), ("meta", meta_text), ("attributes", " · ".join(p.attr_text)),
+                            ("JSON-LD", " · ".join(ld_strings))):
             for hit in medical_hits(blob):
                 fail(r, f"medical-claim wording in {where} — {hit}")
-            for m in FOUNDER.finditer(blob):
-                fail(r, f'founder name in {where}: "…{blob[max(0, m.start() - 30):m.end() + 30]}…"')
+        for where, blob in (("page", text), ("meta", meta_text), ("JSON-LD", " · ".join(ld_strings))):
             for m in NON_USD.finditer(blob):
                 fail(r, f'non-USD currency in {where}: "…{blob[max(0, m.start() - 30):m.end() + 30]}…"')
+        source = SITE_HANDLE.sub("", p.raw)
+        for m in FOUNDER.finditer(source):
+            line = source.count("\n", 0, m.start()) + 1
+            fail(r, f'founder name in the page source, line {line}: "…{source[max(0, m.start() - 30):m.end() + 30].strip()}…"')
 
         # Internal links resolve; build the link graph
         out = set()
@@ -406,7 +498,8 @@ def main():
                 continue
             frag = urlsplit(absu).fragment
             if target not in pages:
-                fail(r, f"broken internal link {href}")
+                if not os.path.isfile(os.path.join(ROOT, target)):
+                    fail(r, f"broken internal link {href}")
                 continue
             if frag and frag not in pages[target].ids:
                 fail(r, f"link {href} points at a missing #{frag}")
@@ -458,8 +551,6 @@ def main():
         p = pages[r]
         words = len(re.findall(r"[A-Za-z0-9][\w'’-]*", p.visible_text()))
         print(f"{r:<62}{words:>6}{p.size / 1024:>6.1f}{from_home.get(r, '-'):>7}  {lastmod.get(r, '-')}")
-    for n in notes:
-        print("note:", n)
     if failures:
         print(f"\nFAIL — {len(failures)} problem(s):")
         for f in failures:
