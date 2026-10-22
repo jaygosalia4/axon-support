@@ -453,11 +453,11 @@ def main():
 
     # --- report
     print(f"Axon support site — {len(public)} public pages, {len(pages) - len(public)} private (cockpit)")
-    print(f"{'page':<62}{'words':>6}{'KB':>6}{'home':>6}  lastmod")
+    print(f"{'page':<62}{'words':>6}{'KB':>6}{'clicks':>7}  lastmod")
     for r in public:
         p = pages[r]
         words = len(re.findall(r"[A-Za-z0-9][\w'’-]*", p.visible_text()))
-        print(f"{r:<62}{words:>6}{p.size / 1024:>6.1f}{from_home.get(r, '-'):>6}  {lastmod.get(r, '-')}")
+        print(f"{r:<62}{words:>6}{p.size / 1024:>6.1f}{from_home.get(r, '-'):>7}  {lastmod.get(r, '-')}")
     for n in notes:
         print("note:", n)
     if failures:
