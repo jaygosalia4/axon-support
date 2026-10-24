@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; connect-src https://qnpnvdainbakygnnktrn.supabase.co; img-src 'self'; form-action 'none'; base-uri 'none'">
+<title>Sign in to Axon</title>
+<link rel="stylesheet" href="../site.css">
+<link rel="stylesheet" href="signin.css">
+<script src="signin.js" defer></script>
+</head><body>
+<header><a class="logo" href="../"><div class="logo-dot"></div>Axon</a></header>
+<main class="signin">
+<p class="eyebrow">Sign in</p>
+<h1>Sign in to Axon</h1>
+
+<section id="loading"><p class="muted">Checking this sign-in…</p></section>
+
+<section id="start" hidden>
+<div class="answer"><p>This page opens from your AI assistant when you add Axon to it. Start again from your assistant.</p></div>
+</section>
+
+<section id="form" hidden>
+<div class="answer">
+<p><strong id="who">Your assistant</strong> <span id="what">wants to read your Axon scores and daily summaries.</span></p>
+<p class="muted">After you sign in, your browser goes back to <strong id="where">your assistant</strong>.</p>
+</div>
+<div class="callout warn" id="unverified" hidden><strong>Only continue if you started this from that app just now.</strong> Axon can't confirm who made it. If you didn't start a sign-in, close this page.</div>
+<ol class="steps">
+<li>Open Axon on your iPhone.</li>
+<li>Go to <strong>Profile → Connections → Sign in from Claude</strong>.</li>
+<li>Type the code it shows. It works once, for 10 minutes.</li>
+</ol>
+<form id="code-form" novalidate>
+<label for="code">Sign-in code</label>
+<input id="code" name="code" type="text" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="K7QF-M2XD" required>
+<p id="error" class="error" role="alert" hidden></p>
+<button id="go" class="btn" type="submit">Sign in</button>
+</form>
+<p class="muted small">Signing in lets this assistant use your Axon connection until you turn the connection off in Axon. It doesn't change your key.</p>
+</section>
+
+<section id="done" hidden>
+<div class="answer"><p><strong>Signed in.</strong> Going back to <span id="back-to">your assistant</span>…</p></div>
+</section>
+
+<section id="ended" hidden>
+<div class="answer"><p id="ended-text">This sign-in has expired or was already used. Start again from your assistant.</p></div>
+</section>
+</main>
+<footer><span>Axon</span><a href="../">Support</a></footer>
+</body></html>

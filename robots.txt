@@ -1,4 +1,5 @@
 User-agent: *
 Disallow: /cockpit/
+Disallow: /signin/
 Allow: /
 Sitemap: https://jaygosalia4.github.io/axon-support/sitemap.xml
