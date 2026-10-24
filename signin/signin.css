@@ -1,0 +1,14 @@
+/* The sign-in page only (signin/index.html). Tokens come from ../site.css. */
+.signin{max-width:520px}
+.signin h1{font-size:34px}
+.muted{color:var(--muted)}
+.small{font-size:13px;margin-top:20px}
+.steps{margin:8px 0 22px 22px}
+.warn{border-left:3px solid var(--strain)}
+form label{display:block;font-size:13px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+#code{width:100%;font:600 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:4px;text-transform:uppercase;text-align:center;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 12px;margin-bottom:14px}
+#code:focus{outline:2px solid var(--cyan);outline-offset:1px}
+.btn{border:0;cursor:pointer;width:100%;font-size:17px;padding:14px 28px}
+.btn[disabled]{opacity:.5;cursor:default}
+.error{color:var(--strain);font-size:15px;margin:0 0 14px}
+[hidden]{display:none !important}
