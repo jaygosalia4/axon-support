@@ -526,7 +526,7 @@ const T = {
 const MIDNIGHT_FIX_VERSION = '1.9.5';
 // The version live on the App Store — a constant, never max(versions seen),
 // so one TestFlight phone cannot re-label the fleet. Move it at every release.
-const SHIPPED_VERSION = '2.1';
+const SHIPPED_VERSION = '2.1.2';
 
 // ── Fetch caps ────────────────────────────────────────────────────────────
 const FLEET_PAGE      = 1000;
@@ -1359,11 +1359,43 @@ function pooledRetention(idx, days, n) {
 
 // ══ 4. WHAT THEY USE ══════════════════════════════════════════════════════
 const TAB_LABEL = { body: 'Home', home: 'Home', mind: 'Mind', food: 'Food', fit_age: 'Fit Age', pulse: 'Pulse' };
+/// Fit Age stopped being a tab in 2.1.1 (Oct 15 2026): Home’s FIT AGE row opens the page, and
+/// `tab_viewed fit_age` is no longer sent from those builds. The screens row therefore reads BOTH
+/// doors — the tab up to 2.1, `fitness_age_viewed` (the page, whichever way it was opened) — so
+/// a week that mixes builds does not read as falling interest. One person counts once a week.
+const FIT_AGE_HOME_VERSION = '2.1.1';
+const FIT_AGE_SCREEN = { key: 'tab:fit_age', label: 'Fit Age (any door)',
+  def: 'Fit Age opened: tab_viewed fit_age (the tab, up to 2.1) or fitness_age_viewed (the page, from Home or a promo, 2.1.1+). A person counts once a week.',
+  test: r => r.event === 'fitness_age_viewed' || (r.event === 'tab_viewed' && r.data === 'fit_age') };
 function screenItems(idx) {
   const seen = new Set();
-  for (const p of idx.list) for (const r of p.rows) if (r.event === 'tab_viewed' && typeof r.data === 'string' && /^[a-z_]{1,24}$/.test(r.data)) seen.add(r.data);
-  return [...seen].sort().map(t => ({ key: 'tab:' + t, label: TAB_LABEL[t] || t, def: `tab_viewed ${t}`, test: r => r.event === 'tab_viewed' && r.data === t }));
+  for (const p of idx.list) for (const r of p.rows) {
+    if (r.event === 'tab_viewed' && typeof r.data === 'string' && /^[a-z_]{1,24}$/.test(r.data)) seen.add(r.data);
+    else if (r.event === 'fitness_age_viewed') seen.add('fit_age');
+  }
+  return [...seen].sort().map(t => t === 'fit_age' ? FIT_AGE_SCREEN
+    : ({ key: 'tab:' + t, label: TAB_LABEL[t] || t, def: `tab_viewed ${t}`, test: r => r.event === 'tab_viewed' && r.data === t }));
 }
+/// Fit Age opens per 100 active person-days, split at the build that moved Fit Age to Home. A
+/// person-day is a person with any event that day, on that side of the split; an open is
+/// `fitness_age_viewed`. Rows with no build are on neither side (same rule as the sync split).
+/// The 2.1 builds’ figure is the reading to compare 2.1.1+ against, from the data, not a constant.
+function fitAgeDoor(idx, days, pivot = FIT_AGE_HOME_VERSION) {
+  const set = new Set(days);
+  const side = () => ({ views: 0, pd: new Set(), ids: new Set() });
+  const before = side(), from = side();
+  for (const p of idx.list) for (const r of p.rows) {
+    if (!set.has(r.day) || !r.v) continue;
+    const s = semverCmp(r.v, pivot) < 0 ? before : from;
+    s.pd.add(p.id + '|' + r.day);
+    if (r.event === 'fitness_age_viewed') { s.views++; s.ids.add(p.id); }
+  }
+  const fin = s => ({ views: s.views, personDays: s.pd.size, people: s.ids.size, ids: s.ids, rate: rate(s.views, s.pd.size) });
+  return { pivot, before: fin(before), from: fin(from) };
+}
+/// "19 per 100" at the n floor and above; under it the fraction and the word directional (the n rule).
+const per100Text = r => !r.known ? '—' : r.directional ? r.text : `${Math.round(r.pct)} per 100`;
+const per100Val = r => r.known ? escHtml(per100Text(r)) + (r.directional ? ' <span class="qual" style="font-size:var(--t5)">directional</span>' : '') : '<span class="dash">—</span>';
 const FEATURE_ITEMS = [
   { key: 'check_in',  label: 'Checked in',        def: 'check_in — from Home or Mind.', test: r => r.event === 'check_in' },
   // Sep 26 2026: was `food_logged`, an event the app has never emitted — the item counted
@@ -1371,7 +1403,8 @@ const FEATURE_ITEMS = [
   { key: 'food',      label: 'Logged food',       def: 'food_entry_added — one or more food entries logged in the app.', test: r => r.event === 'food_entry_added' },
   // 1.9.8: the energy-history page (net over 7/30/90 days). src:food = the Food tab's summary door.
   { key: 'ledger',    label: 'Opened energy history', def: 'energy_ledger_viewed — the net-energy history page opened (1.9.8+); src:food is the Food tab door, src:target the target page.', test: r => r.event === 'energy_ledger_viewed' },
-  { key: 'fitage',    label: 'Opened Fit Age',    def: 'fitness_age_viewed.', test: r => r.event === 'fitness_age_viewed' },
+  // 2.1.1: the Fit Age tab is gone; Home’s FIT AGE row (or a promo) opens the page. Same event, once a day. Up to 2.1 it fired from the tab.
+  { key: 'fitage',    label: 'Opened Fit Age', def: 'fitness_age_viewed — the Fit Age page opened, once a day: from Home or a promo since 2.1.1, from the Fit Age tab up to 2.1.', test: r => r.event === 'fitness_age_viewed' },
   { key: 'share',     label: 'Opened a share',    def: 'share_opened — only when a card actually rendered.', test: r => r.event === 'share_opened' },
   // 1.9.8: the day-3 Share Axon sheet (share_app promo route). Counts the sheet OPENING, never a send — iOS never says.
   { key: 'applink',   label: 'Shared the app link', def: 'share_opened card:app_link — the day-3 Share Axon sheet opened (1.9.8+). Installs from it land in App Store Connect under ct=share-day3.', test: r => r.event === 'share_opened' && r.data === 'card:app_link' },
@@ -2535,7 +2568,7 @@ const TILES = [
   // ── 4. WHAT THEY USE ──────────────────────────────────────────────────
   {
     id: 'use.screens', section: 'use', title: 'Screens',
-    def: 'People who opened each tab (tab_viewed) ÷ people active that week.',
+    def: 'People who opened each tab (tab_viewed) ÷ people active that week. Fit Age is read through either door: the tab up to 2.1, fitness_age_viewed since 2.1.1.',
     natural: { weeks: 4 }, maxWeeks: 12, filters: BOTH,
     view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx), cx.lastDay), this.id); },
     table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, screenItems(cx.idx), cx.lastDay)); },
@@ -2543,11 +2576,39 @@ const TILES = [
   },
   {
     id: 'use.features', section: 'use', title: 'Features',
-    def: 'People who used each feature ÷ people active that week. Widget is a daily device reading, not a tap.',
+    def: 'People who used each feature ÷ people active that week. Widget is a daily device reading, not a tap. Below: Fit Age opens per 100 active person-days, builds before 2.1.1 against 2.1.1+.',
     natural: { weeks: 4 }, maxWeeks: 12, filters: BOTH,
-    view(cx) { const u = needIdx(cx); if (u) return u; return usageGrid(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), this.id); },
-    table(cx) { return usageTable(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay)); },
-    drill(key, cx) { return usageDrill(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), key, cx); },
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const d = fitAgeDoor(cx.idx, cx.days), tid = this.id;
+      const side = (label, x, key, tip) => `<div${drillAttr(tid, x.ids.size ? key : null, tip)}>${kpi(label, per100Val(x.rate), x.personDays ? `${x.views} ${x.views === 1 ? 'open' : 'opens'} · ${x.personDays} ${x.personDays === 1 ? 'person-day' : 'person-days'}` : 'no person-days yet', null, true)}</div>`;
+      return usageGrid(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), tid)
+        + `<div class="mini-h" style="margin-top:12px">Fit Age opens per 100 active person-days, every day in the range</div>`
+        + `<div class="kpis">${side(`Before ${d.pivot}`, d.before, 'fa|before', 'People who opened Fit Age on a build before ' + d.pivot)}${side(`${d.pivot} and later`, d.from, 'fa|from', 'People who opened Fit Age on ' + d.pivot + ' or later')}</div>`
+        + `<div class="gap-note">An open is fitness_age_viewed, at most once a day. Since ${escHtml(d.pivot)} Fit Age has no tab: Home’s FIT AGE row (or a promo) is the way in. A person-day is a person with any event that day. Under 20: the fraction, directional.</div>`;
+    },
+    table(cx) {
+      const u = usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay);
+      const t = usageTable(u);
+      // The per-100 rows hold the same weekly columns; the cell formatter reads the row, so a rate per 100 never prints as a share.
+      t.cols = t.cols.map(c => /^w\d+$/.test(c.key) ? { ...c, fmt: (v, r) => r._per100 ? (v === null || v === undefined ? '—' : String(Math.round(v))) : pctFmt(v) } : c);
+      const wk = u.weeks.map(w => weekDays(w).filter(d => (!u.lastDay || d <= u.lastDay)));
+      const whole = fitAgeDoor(cx.idx, cx.days);
+      for (const [label, k] of [[`Fit Age opens per 100 active person-days · before ${FIT_AGE_HOME_VERSION}`, 'before'], [`Fit Age opens per 100 active person-days · ${FIT_AGE_HOME_VERSION} and later`, 'from']]) {
+        const per = wk.map(days => fitAgeDoor(cx.idx, days)[k]);
+        t.rows.push(Object.assign({ label, _per100: true, people: per.length ? per[per.length - 1].people : 0, _drill: whole[k].ids.size ? 'fa|' + k : null },
+          ...per.map((x, i) => ({ ['w' + i]: x.rate.known ? x.rate.pct : null }))));
+      }
+      return t;
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      if (k === 'fa') {
+        const d = fitAgeDoor(cx.idx, cx.days)[v === 'from' ? 'from' : 'before'];
+        return peopleTable(peopleBy(cx, d.ids), `Opened Fit Age on ${v === 'from' ? FIT_AGE_HOME_VERSION + ' or later' : 'a build before ' + FIT_AGE_HOME_VERSION} · ${d.people} people`);
+      }
+      return usageDrill(usageByWeek(cx.idx, cx.mondays, FEATURE_ITEMS, cx.lastDay), key, cx);
+    },
   },
   {
     id: 'use.notifs', section: 'use', title: 'Notification taps, by kind',
@@ -3337,7 +3398,7 @@ function setTheme(theme, remember) {
    PART 4 — ?demo
    =========================================================================
    A deterministic synthetic warehouse: ~70 persons over 70 days, legacy
-   installs, upgrades across four versions, sign-ins that fail three ways,
+   installs, upgrades across five versions (the newest, 2.1.1, only days old), sign-ins that fail three ways,
    one App-Review-shaped device, campaigns, taps, feedback, a rating
    snapshot, and a midnight sync-failure cluster on ≤1.9.4 that is GONE on
    1.9.5+. Seeded, so the same URL renders the same page every time.
@@ -3385,7 +3446,7 @@ function buildDemo(opts) {
   const MODELS = ['iPhone16,2', 'iPhone15,3', 'iPhone17,1', 'iPhone14,5', 'iPhone16,1', 'iPhone17,3', 'iPhone13,2', 'iPhone15,4', 'iPhone18,1'];
   const OSES = ['26.0', '26.0.1', '18.6', '26.0', '18.7', '26.1'];
   // Release day of each version, relative to the last complete day.
-  const RELEASES = [['1.9.4', -80], ['1.9.5', -38], ['1.9.6', -21], ['1.9.7', -3]];
+  const RELEASES = [['1.9.4', -80], ['1.9.5', -38], ['1.9.6', -21], ['1.9.7', -3], ['2.1.1', -2]];
   const versionOn = (day, lag, frozen) => {
     let v = RELEASES[0][0];
     for (const [ver, off] of RELEASES) if (shiftDay(last, off + lag) <= day) v = ver;
@@ -3488,8 +3549,11 @@ function buildDemo(opts) {
         push(p, day, hour, 'sync_completed', rnd() < 0.15 ? 'no_watch_data' : 'ok');
         if (rnd() < 0.9) push(p, day, hour, 'score_visible', 'n:4');
       }
-      push(p, day, hour, 'tab_viewed', pick(['body', 'body', 'body', 'mind', 'food', 'fit_age']));
-      if (rnd() < 0.35) push(p, day, hour, 'tab_viewed', pick(['mind', 'fit_age']));
+      // 2.1.1 removed the Fit Age tab (its page opens from Home, logged as fitness_age_viewed below).
+      // The draws stay the same; a 2.1.1+ build just never sends tab_viewed fit_age.
+      const tabOf = v => (v === 'fit_age' && semverCmp(versionOn(day, p.lag, p.frozen), FIT_AGE_HOME_VERSION) >= 0) ? null : v;
+      const tab1 = tabOf(pick(['body', 'body', 'body', 'mind', 'food', 'fit_age'])); if (tab1) push(p, day, hour, 'tab_viewed', tab1);
+      if (rnd() < 0.35) { const tab2 = tabOf(pick(['mind', 'fit_age'])); if (tab2) push(p, day, hour, 'tab_viewed', tab2); }
       push(p, day, hour, 'app_close', 's:' + (8 + Math.floor(rnd() * 240)));
       if (rnd() < 0.3) push(p, day, hour, 'check_in', 'mood|src:home');
       if (rnd() < 0.08) push(p, day, hour, 'food_entry_added', 'meal:Lunch|src:shelf');
@@ -4253,6 +4317,57 @@ function runSelfTest() {
     ok('notif reach: at least three drill targets on its face, and every one (face and table) opens a non-empty slice', nKeys.length >= 3 && !nBad.length);
     const nTxt = nt.title + ' ' + nt.def + ' ' + strip(tileHtml(nt, nB)) + ' ' + strip(JSON.stringify(nt.table(ncx).rows));
     eq('D-37: no verdict, target, goal, kill, pace or projection word in the notification tile', (nTxt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|watch|late after|nothing to decide)\b/i) || [null])[0], null);
+  }
+
+  // ── P4. Fit Age moves to Home (2.1.1, Oct 15 2026) ──────────────────────
+  {
+    // Week of 2026-09-07: a opens the old tab (2.1, sends both events), b comes in through Home (2.1.1, sends only
+    // fitness_age_viewed), c opens neither, d has an old row with no build at all.
+    const F1 = buildIndex([
+      fe('a', '2026-09-08', 'tab_viewed', 'fit_age', { v: '2.1' }), fe('a', '2026-09-08', 'fitness_age_viewed', 'age', { v: '2.1' }),
+      fe('b', '2026-09-09', 'fitness_age_viewed', 'building', { v: '2.1.1' }),
+      fe('c', '2026-09-09', 'tab_viewed', 'body', { v: '2.1.1' }),
+      Object.assign(fe('d', '2026-09-10', 'fitness_age_viewed', 'age'), { v: null }),
+    ], [], TODAY);
+    const fWeek = ['2026-09-07'];
+    const fScr = usageByWeek(F1, fWeek, screenItems(F1));
+    const fRow = fScr.items.find(x => x.key === 'tab:fit_age');
+    eq('fit age home: the screens row counts people through either door, once each (a: both events, b: Home only, d: no build)', fRow.weeks[0].num, 3);
+    ok('fit age home: a week with only 2.1.1 opens still has the Fit Age screens row', screenItems(buildIndex([fe('b', '2026-09-09', 'fitness_age_viewed', 'age', { v: '2.1.1' })], [], TODAY)).some(x => x.key === 'tab:fit_age'));
+    ok('fit age home: the screens row says it reads either door and names 2.1.1', /any door/.test(fRow.label) && /tab_viewed fit_age/.test(fRow.def) && /fitness_age_viewed/.test(fRow.def) && /2\.1\.1/.test(fRow.def));
+    eq('fit age home: the other screens are unchanged (Home, Mind, Food, Pulse read only tab_viewed)', ['body', 'mind', 'food', 'pulse'].map(t => { const i = screenItems(buildIndex([fe('z', '2026-09-08', 'tab_viewed', t)], [], TODAY)).find(x => x.key === 'tab:' + t); return !!i && i.test({ event: 'tab_viewed', data: t }) && !i.test({ event: 'fitness_age_viewed', data: 'age' }); }), [true, true, true, true]);
+    const fitem = FEATURE_ITEMS.find(x => x.key === 'fitage');
+    ok('fit age home: the feature row spans both builds, so its label names no door; its definition names both doors and 2.1.1; it still counts only fitness_age_viewed', fitem.label === 'Opened Fit Age' && /from Home/.test(fitem.def) && /tab/.test(fitem.def) && /2\.1\.1/.test(fitem.def) && fitem.test({ event: 'fitness_age_viewed', data: 'age' }) && !fitem.test({ event: 'tab_viewed', data: 'fit_age' }));
+    const fd = fitAgeDoor(F1, completeDays(TODAY, 30));
+    eq('fit age home: opens and person-days split at 2.1.1; a row with no build is on neither side', [fd.pivot, fd.before.views, fd.before.personDays, fd.from.views, fd.from.personDays], ['2.1.1', 1, 1, 1, 2]);
+    eq('fit age home: under 20 person-days it is the fraction and directional, never a bare per-100', [fd.before.rate.text, fd.before.rate.directional, per100Text(fd.before.rate)], ['1 of 1', true, '1 of 1']);
+    const bigRows = [];
+    for (let i = 0; i < 25; i++) { bigRows.push(fe('k' + i, '2026-09-16', 'tab_viewed', 'body', { v: '2.1' })); if (i < 5) bigRows.push(fe('k' + i, '2026-09-16', 'fitness_age_viewed', 'age', { v: '2.1' })); }
+    const fb = fitAgeDoor(buildIndex(bigRows, [], TODAY), completeDays(TODAY, 7));
+    eq('fit age home: at 20 or more person-days it is a rate per 100 (5 opens in 25 person-days = 20 per 100)', [fb.before.personDays, per100Text(fb.before.rate), per100Text(fb.from.rate)], [25, '20 per 100', '—']);
+    eq('fit age home: nobody on 2.1.1 yet is a gap, never a zero', [fb.from.rate.known, fb.from.personDays], [false, 0]);
+    eq('fit age home: a second open on the same day is two opens but one person-day', (() => { const x = fitAgeDoor(buildIndex([fe('m', '2026-09-16', 'fitness_age_viewed', 'age', { v: '2.1.1' }), fe('m', '2026-09-16', 'fitness_age_viewed', 'age', { v: '2.1.1' })], [], TODAY), ['2026-09-16']).from; return [x.views, x.personDays, x.people]; })(), [2, 1, 1]);
+
+    // The demo: no 2.1.1+ build ever sends tab_viewed fit_age, and some 2.1.1+ person-days exist for the split to read.
+    const fToday = todayIST();
+    const fDemo = buildDemo({ today: fToday, nowMs: NOW });
+    const newBuild = r => !!r.v && semverCmp(r.v, FIT_AGE_HOME_VERSION) >= 0;
+    ok('fit age home: the demo’s 2.1.1+ builds never send tab_viewed fit_age, and its older builds still do',
+       !fDemo.fleet.some(r => newBuild(r) && r.event === 'tab_viewed' && r.data === 'fit_age') && fDemo.fleet.some(r => !newBuild(r) && r.event === 'tab_viewed' && r.data === 'fit_age'));
+    ok('fit age home: the demo has 2.1.1+ person-days, and fitness_age_viewed on the older builds', fDemo.fleet.some(newBuild) && fDemo.fleet.some(r => !newBuild(r) && r.event === 'fitness_age_viewed'));
+    const fB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, fDemo), defaultFilters(), fToday, NOW);
+    const ft = TILES.find(t => t.id === 'use.features');
+    const fcx = tileCtx(ft, fB);
+    const fFace = ft.view.call(ft, fcx);
+    ok('fit age home: the Features tile prints the per-100 read for both sides under the grid', /Fit Age opens per 100 active person-days/.test(strip(fFace)) && /Before 2\.1\.1/.test(strip(fFace)) && /2\.1\.1 and later/.test(strip(fFace)));
+    const fTab = ft.table(fcx);
+    const fRows = fTab.rows.filter(r => r._per100);
+    ok('fit age home: the table carries the same two rows, weekly, and prints them as a plain number, not a percentage',
+       fRows.length === 2 && fRows.every(r => /per 100 active person-days/.test(r.label)) && fTab.cols.filter(c => /^w\d+$/.test(c.key)).every(c => c.fmt(50, { _per100: true }) === '50' && c.fmt(50, {}) === '50%'));
+    const fKeys = [...fFace.matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').split('::')[1]).filter(k => /^fa\|/.test(k));
+    ok('fit age home: the older-build side opens a non-empty slice of anonymous people (the 2.1.1+ side only draws a drill when someone opened)', fKeys.includes('fa|before') && fKeys.every(k => { const d = ft.drill.call(ft, k, fcx); return d && d.rows.length && d.rows.every(r => /^#[0-9a-f]{7}$/.test(r.who)); }));
+    const fTxt = strip(fFace.slice(fFace.indexOf('Fit Age opens per 100'))) + ' ' + strip(JSON.stringify(fRows)) + ' ' + ft.def.slice(ft.def.indexOf('Below'));
+    eq('D-37: no verdict, target, goal, kill, pace or projection word in the Fit Age read', (fTxt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|watch|late after|nothing to decide|baseline)\b/i) || [null])[0], null);
   }
 
   // ── Q. Copy and structure law ───────────────────────────────────────────
