@@ -53,12 +53,15 @@
       return;
     }
     var b = r.body;
-    $("who").textContent = b.verified ? b.client : "An app that calls itself “" + b.client + "”";
+    // Unverified = a program that registered itself (always on this computer: loopback only).
+    $("who").textContent = b.verified ? b.client
+      : b.client ? "A program on this computer that calls itself “" + b.client + "”"
+      : "A program on this computer";
     $("what").textContent = (b.scopes || []).indexOf("write") >= 0
-      ? "wants to read your Axon scores and daily summaries, and log mood check-ins, meals and naps for you."
+      ? "wants to read your Axon scores and daily summaries, and log mood check-ins, meals and naps for you while logging is on in Axon."
       : "wants to read your Axon scores and daily summaries.";
     $("where").textContent = b.return_to;
-    $("back-to").textContent = b.verified ? b.client : b.return_to;
+    $("back-to").textContent = b.verified ? b.client : "the program";
     $("unverified").hidden = !!b.verified;
     show("form");
     $("code").focus();
