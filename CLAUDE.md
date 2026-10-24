@@ -20,6 +20,6 @@ Written by the one Axon chat from the brief in the Axon repo session (facts veri
 Store and Apple Newsroom on Sep 11–12 2026). Rules that hold for every page: truth only with a Sources list;
 wellness not medicine; no founder name; USD; "free" is fine here (the App Store metadata ban does not apply to
 the web); fair "who should NOT pick Axon" section on comparisons; store links carry `ct=web-<slug>` so ASC
-attributes the download. Validate with the session's `validate_site.py` (h1/title/description/canonical/
-JSON-LD FAQPage+Article/related links/word count/banned words) before pushing. Strategy owner: the marketing
+attributes the download. Validate with `python3 scripts/validate_site.py` (stdlib only; h1/title/description/canonical/Smart App Banner/
+JSON-LD FAQPage+Article/dates/related links/word count/banned words/sitemap) before pushing — it must print PASS. Strategy owner: the marketing
 worktree's `marketing/SOCIAL.md`; GTM: J Brain `outputs/2026-09-11-axon-gtm-v1.md`.

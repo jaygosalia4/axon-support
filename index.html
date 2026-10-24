@@ -3,8 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-itunes-app" content="app-id=6765889625" />
   <meta name="google-site-verification" content="jQhoEPfLZvFM6E8T0clcdeWSMnvbtUtgvo2PqbN_13c" />
-  <title>Axon — Support</title>
+  <title>Axon Support — Sleep, Recovery, Strain and Readiness scores</title>
+  <meta name="description" content="Help for Axon, the iPhone app that turns your Apple Watch data into four daily scores: Sleep, Recovery, Strain and Readiness. FAQ, guides and contact." />
+  <link rel="canonical" href="https://jaygosalia4.github.io/axon-support/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Axon Support — Sleep, Recovery, Strain and Readiness scores" />
+  <meta property="og:description" content="Help for Axon, the iPhone app that turns your Apple Watch data into four daily scores: Sleep, Recovery, Strain and Readiness. FAQ, guides and contact." />
+  <meta property="og:url" content="https://jaygosalia4.github.io/axon-support/" />
   <style>
     :root {
       --bg: #0c0c0e;
@@ -58,6 +65,11 @@
       margin-left: 28px;
     }
     header nav a:hover { color: var(--text); }
+    @media (max-width: 600px) {
+      header { padding: 16px 20px; }
+      header nav a { margin-left: 14px; font-size: 13px; }
+      footer { padding: 28px 20px; }
+    }
 
     /* --- Hero --- */
     .hero {
@@ -162,6 +174,11 @@
       line-height: 1.65;
     }
 
+    /* --- Guides --- */
+    .guide-list { list-style: none; border-top: 1px solid var(--border); }
+    .guide-list li { border-bottom: 1px solid var(--border); padding: 14px 0; font-size: 15px; }
+    .guide-list .more { font-weight: 600; }
+
     /* --- Contact --- */
     .contact-box {
       background: var(--surface);
@@ -245,6 +262,25 @@
         <p>Your overall bio-recharge — ready to push hard or rest?</p>
       </div>
     </div>
+  </section>
+
+  <!-- ── Guides ── -->
+  <section class="section" id="guides">
+    <p class="section-title">Guides</p>
+    <ul class="guide-list">
+      <li><a href="guides/best-whoop-alternatives/">Best WHOOP alternatives in 2026 (no strap, no subscription)</a></li>
+      <li><a href="guides/apple-watch-recovery-score-without-whoop/">How to get a recovery score on Apple Watch — without WHOOP</a></li>
+      <li><a href="guides/readiness-score-explained/">Readiness score explained: what it measures and how to read it</a></li>
+      <li><a href="guides/apple-watch-sleep-score-vs-recovery-score/">Apple Watch Sleep Score vs a recovery score</a></li>
+      <li><a href="guides/readiness-score-on-older-apple-watch/">How to get a readiness score on an older Apple Watch (Series 4–11)</a></li>
+      <li><a href="guides/body-battery-on-apple-watch/">Body Battery on Apple Watch: is there an equivalent?</a></li>
+      <li><a href="guides/what-is-a-good-hrv-on-apple-watch/">What is a good HRV on Apple Watch? How to read it</a></li>
+      <li><a href="guides/athlytic-vs-axon/">Athlytic vs Axon</a></li>
+      <li><a href="guides/bevel-vs-axon/">Bevel vs Axon</a></li>
+      <li><a href="guides/connect-apple-watch-scores-to-chatgpt-claude/">Connect your Apple Watch health scores to ChatGPT or Claude</a></li>
+      <li><a href="ai/">Connect Axon to your AI assistant (beta)</a></li>
+      <li><a class="more" href="guides/">All guides →</a></li>
+    </ul>
   </section>
 
   <!-- ── FAQ ── -->
