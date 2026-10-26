@@ -63,6 +63,7 @@
     $("where").textContent = b.return_to;
     $("back-to").textContent = b.verified ? b.client : "the program";
     $("unverified").hidden = !!b.verified;
+    $("own").hidden = !b.verified;
     show("form");
     $("code").focus();
   }, function () {
