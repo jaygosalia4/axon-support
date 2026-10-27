@@ -4,7 +4,7 @@
 Standard library only. Run from anywhere:  python3 scripts/validate_site.py
 Exit code 0 = every check passed; 1 = at least one failure (listed).
 
-Public page = any .html file outside cockpit/ that is not marked noindex.
+Public page = any .html file outside cockpit/ and signin/ that is not marked noindex.
 For each public page it checks: one h1, title, meta description, canonical
 (absolute, matching the page's own address), the Smart App Banner, valid
 JSON-LD (Article + FAQPage on guides, FAQ questions visible on the page),
@@ -13,8 +13,11 @@ links, internal links that resolve, word count, page weight, the mobile
 viewport, and banned words (medical-claim words, the founder's name,
 non-USD prices). Site-wide it checks the sitemap lists exactly the public
 pages, every guide is within two clicks of the home page and one click of
-the guides index, every guide has links from other guides, the cockpit
-stays noindex with no banner, and the Search Console tag is still there.
+the guides index, every guide has links from other guides, the cockpit and the
+AI sign-in page stay noindex with no banner, the sign-in page keeps its
+content policy (scripts from this site only, connections to Axon's server
+only, no framing script removed) and loads no tracker or storage, and the
+Search Console tag is still there.
 """
 
 import datetime
@@ -31,7 +34,7 @@ BASE = "https://jaygosalia4.github.io/axon-support/"
 APP_ID = "6765889625"
 BANNER = f"app-id={APP_ID}"
 VERIFICATION = "jQhoEPfLZvFM6E8T0clcdeWSMnvbtUtgvo2PqbN_13c"
-PRIVATE_DIRS = ("cockpit",)
+PRIVATE_DIRS = ("cockpit", "signin")  # out of search: the dashboard, and the AI sign-in page (Oct 2026)
 
 TITLE_MAX = 70
 DESC_MIN, DESC_MAX = 70, 170
@@ -544,8 +547,34 @@ def main():
         if inbound < MIN_GUIDE_INBOUND:
             fail(r, f"only {inbound} other guides link here (min {MIN_GUIDE_INBOUND})")
 
+    # --- the AI sign-in page: a one-time code is typed here, so nothing else may run on it
+    signin = pages.get("signin/index.html")
+    if signin is None:
+        failures.append("signin/index.html: missing")
+    else:
+        csp = " ".join(signin.raw and re.findall(r'http-equiv="Content-Security-Policy" content="([^"]+)"', signin.raw))
+        for part in ("default-src 'none'", "script-src 'self'", "connect-src https://qnpnvdainbakygnnktrn.supabase.co;", "form-action 'none'", "base-uri 'none'"):
+            if part not in csp:
+                fail("signin/index.html", f"content policy lost {part!r}")
+        if re.search(r"<script[^>]+src=\"(https?:)?//", signin.raw):
+            fail("signin/index.html", "loads a script from another site")
+        if 'name="referrer" content="no-referrer"' not in signin.raw:
+            fail("signin/index.html", "lost its no-referrer policy")
+        try:
+            with open(os.path.join(ROOT, "signin", "signin.js"), encoding="utf-8") as fh:
+                js = fh.read()
+        except OSError:
+            js = ""
+            failures.append("signin/signin.js: missing")
+        for banned, why in (("localStorage", "storage"), ("sessionStorage", "storage"), ("document.cookie", "cookies"),
+                            ("gtag", "a tracker"), ("posthog", "a tracker"), ("innerHTML =", "HTML from data")):
+            if banned in js and not (banned == "innerHTML =" and 'document.documentElement.innerHTML = ""' in js and js.count("innerHTML") == 1):
+                fail("signin/signin.js", f"uses {why} ({banned})")
+        if "window.top !== window.self" not in js:
+            fail("signin/signin.js", "lost its frame check")
+
     # --- report
-    print(f"Axon support site — {len(public)} public pages, {len(pages) - len(public)} private (cockpit)")
+    print(f"Axon support site — {len(public)} public pages, {len(pages) - len(public)} private (cockpit, signin)")
     print(f"{'page':<62}{'words':>6}{'KB':>6}{'clicks':>7}  lastmod")
     for r in public:
         p = pages[r]
