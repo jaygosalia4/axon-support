@@ -233,7 +233,7 @@
   <!-- ── Hero ── -->
   <div class="hero">
     <h1>Health scores that <span>actually make sense</span></h1>
-    <p>Axon reads your Apple Health data and gives you four daily scores — Sleep, Recovery, Strain, and Readiness — so you know exactly how your body is doing.</p>
+    <p>Axon turns the Apple Watch you already wear into four daily scores — Sleep, Recovery, Strain, and Readiness — computed on your iPhone.</p>
     <a href="#contact" class="btn">Get Support</a>
   </div>
 
@@ -289,11 +289,11 @@
     <div class="faq">
       <div class="faq-item">
         <p class="faq-q">Does Axon require an Apple Watch?</p>
-        <p class="faq-a">No. Axon works with iPhone data only (steps, workouts, sleep from the iPhone accelerometer). However, an Apple Watch significantly improves accuracy — it unlocks sleep stages, HRV, resting heart rate, and full workout metrics. Without it, missing metrics score a neutral 50 rather than 0.</p>
+        <p class="faq-a">For Sleep and Strain, no: Axon can use what your iPhone already writes to Apple Health (sleep time, steps, workouts). Recovery and Readiness need an Apple Watch worn overnight (Series 4 or later, SE or Ultra), because they are built on overnight heart rate variability and resting heart rate. A Watch also adds sleep stages and heart-rate training load. When a score has no real data, Axon shows a dash and says why. It never fills the gap with a made-up number.</p>
       </div>
       <div class="faq-item">
         <p class="faq-q">Why is my score 0 or blank?</p>
-        <p class="faq-a">Scores calculate from your Apple Health data. On your first day or after granting HealthKit access, Axon needs at least one night of sleep data and some activity data to generate meaningful scores. Open the Health app to confirm data is being recorded.</p>
+        <p class="faq-a">Scores calculate from your Apple Health data. On your first day or after granting HealthKit access, Axon needs at least one night of sleep data and some activity data to generate meaningful scores. Open the Health app to confirm data is being recorded. If you did not wear your Apple Watch overnight, Recovery and Readiness show a dash for that day, with the reason. A Strain of 0 is a real reading: a rest day.</p>
       </div>
       <div class="faq-item">
         <p class="faq-q">How do I grant HealthKit permissions?</p>
@@ -301,19 +301,19 @@
       </div>
       <div class="faq-item">
         <p class="faq-q">Is my health data sent to any servers?</p>
-        <p class="faq-a">Axon is local-first. Raw HealthKit data never leaves your device. Optional anonymous sync sends only aggregated daily score summaries (not raw health data) to Supabase to back up your history. You can review the full <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy Policy</a>.</p>
+        <p class="faq-a">Your four scores are computed on your iPhone, and raw Apple Health samples never leave it. Two switches can share health data, and both are off by default: <em>Contribute anonymized health data</em> (Profile → Privacy) sends daily metrics under a random ID that cannot be linked back to you, and <em>Connect Axon to my AI assistant</em> (Profile → Connections) shares your daily scores and summaries with the assistant you choose; turning it off deletes that copy. Every install sends anonymous usage analytics (which screens you open, never a health value). Signing in is optional and does not back up your health history: a fresh install rebuilds your last 120 days of scores from Apple Health. Full detail in the <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy Policy</a>.</p>
       </div>
       <div class="faq-item">
-        <p class="faq-q">How do I cancel my subscription?</p>
-        <p class="faq-a">Subscriptions are managed by Apple. Go to iOS Settings → [Your Name] → Subscriptions → Axon → Cancel Subscription. You keep access until the end of the current billing period.</p>
+        <p class="faq-q">Is Axon free?</p>
+        <p class="faq-a">Yes. Every feature is free today, and there is no subscription to cancel. If a paid tier for extra depth ships later, it will be optional, the daily scores will stay free, and you would manage it in iOS Settings → [Your Name] → Subscriptions.</p>
       </div>
       <div class="faq-item">
         <p class="faq-q">How do I delete my account and data?</p>
-        <p class="faq-a">Inside the app: Profile → scroll to the bottom → tap "Delete Account". This permanently removes all your scores, check-ins, journal entries, and account data from both the device and our servers. This action cannot be undone.</p>
+        <p class="faq-a">Inside the app: Profile → scroll to the bottom → tap "Delete Account" (or "Erase everything on this phone" if you never signed in). This permanently removes all your scores, check-ins, journal entries, and account data from both the device and our servers. This action cannot be undone.</p>
       </div>
       <div class="faq-item">
         <p class="faq-q">The app says my HealthKit data is unavailable — what do I do?</p>
-        <p class="faq-a">This usually means permissions were denied or the Health app has no data for a metric. Check iOS Settings → Privacy & Security → Health → Axon and ensure all categories are toggled on. Then open Axon and pull to refresh on the Body tab.</p>
+        <p class="faq-a">This usually means permissions were denied or the Health app has no data for a metric. Check iOS Settings → Privacy & Security → Health → Axon and ensure all categories are toggled on. Then open Axon and pull to refresh on Home.</p>
       </div>
       <div class="faq-item">
         <p class="faq-q">What iOS version does Axon require?</p>
