@@ -14,6 +14,9 @@
 
 **Known issue (found 2026-07-12):** the "Privacy Policy" link points at `raw.githubusercontent.com/jaygosalia4/Axon-Vital-Score/main/PRIVACY_POLICY.md`, but that repo is private → the link 404s for users. Fix by hosting the policy on this public site (e.g. `privacy.html`) and relinking — coordinate with the v1.6.2 privacy-policy rewrite in the app repo.
 
+## Sign-in page (live 2026-10-27)
+`signin/` is the AI sign-in page (OAuth option B, app repo PR #14): the AI server's `/oauth/authorize` sends people here with a one-time handle in the URL fragment; they type the code from the Axon app. Private like `cockpit/` (noindex, no banner, not in the sitemap); its content policy, frame check and no-storage rule are checked by `validate_site.py`. Never add a tracker or an outside script to it. It always shows "only continue if you started this yourself" (review Oct 26).
+
 ## Guides (added 2026-09-12 — the GTM's search layer)
 `guides/<slug>/index.html` × 6 + `guides/index.html`, shared `site.css`, `sitemap.xml`, `robots.txt`.
 Written by the one Axon chat from the brief in the Axon repo session (facts verified against the US App
