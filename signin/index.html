@@ -24,19 +24,23 @@
 <p><strong id="who">Your assistant</strong> <span id="what">wants to read your Axon scores and daily summaries.</span></p>
 <p class="muted">After you sign in, your browser goes back to <strong id="where">your assistant</strong>.</p>
 </div>
-<div class="callout warn" id="own" hidden><strong>Only continue if you started this yourself, just now.</strong> If someone sent you this link, close this page: your code would connect their assistant to your Axon data.</div>
+<div class="callout warn" id="own" hidden><strong>Only continue if you started this yourself, just now.</strong> If someone sent you this link, close this page: continuing would connect their assistant to your Axon data.</div>
 <div class="callout warn" id="unverified" hidden><strong>Only continue if you started this from that program just now.</strong> Axon can't confirm who made it. If you didn't start a sign-in, close this page.</div>
-<ol class="steps">
-<li>Open Axon on your iPhone.</li>
-<li>Go to <strong>Profile → Connections → Sign in from Claude</strong>.</li>
-<li>Type the code it shows. It works once, for 10 minutes.</li>
-</ol>
+<div id="app-way" hidden>
+<a id="open-axon" class="btn" href="#">Open Axon</a>
+<p id="waiting" class="muted center" role="status" hidden>Tap <strong>Allow</strong> in Axon, then come back here.</p>
+<p id="app-error" class="error" role="alert" hidden></p>
+</div>
+<details id="code-way">
+<summary>Use a code instead</summary>
+<p class="muted">In Axon: <strong>Your AI → Claude</strong>. Type the code it shows. It works once, for 10 minutes.</p>
 <form id="code-form" novalidate>
 <label for="code">Sign-in code</label>
 <input id="code" name="code" type="text" inputmode="text" autocomplete="one-time-code" autocapitalize="characters" autocorrect="off" spellcheck="false" maxlength="12" placeholder="K7QF-M2XD" required>
 <p id="error" class="error" role="alert" hidden></p>
 <button id="go" class="btn" type="submit">Sign in</button>
 </form>
+</details>
 <p class="muted small">Signing in lets this assistant use your Axon connection until you turn the connection off in Axon. It doesn't change your key.</p>
 </section>
 
