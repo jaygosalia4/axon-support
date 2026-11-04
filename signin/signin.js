@@ -72,10 +72,13 @@
     $("own").hidden = !b.verified;
     deadline = Date.now() + Math.max(0, b.expires_in || 0) * 1000;
     $("open-axon").href = "vitalscore://sign-in?r=" + encodeURIComponent(handle);
-    $("app-way").hidden = !onIOS;
-    $("code-way").open = !onIOS;
+    // Approve in Axon is for verified clients only (security review Nov 4, M1): a
+    // program that registered itself always gets the typed code.
+    var appWay = onIOS && !!b.verified;
+    $("app-way").hidden = !appWay;
+    $("code-way").open = !appWay;
     show("form");
-    if (!onIOS) $("code").focus();
+    if (!appWay) $("code").focus();
   }, function () {
     $("ended-text").textContent = "Axon couldn't be reached. Check your connection, then start again from your assistant.";
     show("ended");
