@@ -1,7 +1,10 @@
 // The Axon sign-in page. It holds no secret of its own and stores nothing: it reads the
 // sign-in handle from the URL FRAGMENT (no server ever receives a fragment), asks Axon's
-// server who is signing in, sends the person's one-time code, and follows the answer back
-// to the assistant. No cookies, no storage, no analytics, no third-party script.
+// server who is signing in, then either hands the handle to the Axon app ("Open Axon": the
+// person taps Allow there, and this page asks every few seconds until it is approved) or
+// sends a typed one-time code — and follows the answer back to the assistant. Only this page,
+// never the app, receives the code that finishes the sign-in. No cookies, no storage, no
+// analytics, no third-party script.
 (function () {
   "use strict";
   var API = "https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai";
@@ -13,6 +16,9 @@
   }
 
   function $(id) { return document.getElementById(id); }
+  // "Open Axon" works where the app lives: an iPhone or iPad (iPadOS reports a Mac with touch).
+  var onIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   function show(id) {
     ["loading", "start", "form", "done", "ended"].forEach(function (s) { $(s).hidden = s !== id; });
   }
@@ -64,11 +70,69 @@
     $("back-to").textContent = b.verified ? b.client : "the program";
     $("unverified").hidden = !!b.verified;
     $("own").hidden = !b.verified;
+    deadline = Date.now() + Math.max(0, b.expires_in || 0) * 1000;
+    $("open-axon").href = "vitalscore://sign-in?r=" + encodeURIComponent(handle);
+    // Approve in Axon is for verified clients only (security review Nov 4, M1): a
+    // program that registered itself always gets the typed code.
+    var appWay = onIOS && !!b.verified;
+    $("app-way").hidden = !appWay;
+    $("code-way").open = !appWay;
     show("form");
-    $("code").focus();
+    if (!appWay) $("code").focus();
   }, function () {
     $("ended-text").textContent = "Axon couldn't be reached. Check your connection, then start again from your assistant.";
     show("ended");
+  });
+
+  function leave(back) {
+    polling = false;
+    show("done");
+    window.location.replace(back);
+  }
+  function end(msg) {
+    polling = false;
+    $("ended-text").textContent = msg || "This sign-in has expired or was already used. Start again from your assistant.";
+    show("ended");
+  }
+
+  // ── Open Axon: the app approves; this page asks until it has been (free while waiting) ──
+  var deadline = 0;
+  var polling = false;
+  var timer = null;
+  var misses = 0;
+  function poll() {
+    clearTimeout(timer);
+    if (!polling) return;
+    if (Date.now() > deadline) { end(); return; }
+    post("/oauth/approve", { request: handle, via: "app" }).then(function (r) {
+      if (!polling) return;
+      misses = 0;
+      var back = r.status === 200 && r.body && safeBack(r.body.redirect);
+      if (back) { leave(back); return; }
+      if (r.status === 202) { timer = setTimeout(poll, 2000); return; }
+      end(r.body && r.body.message);
+    }, function () {
+      // Offline for a moment (switching apps): keep asking, a little slower, then say so.
+      misses += 1;
+      if (misses >= 10) {
+        polling = false;
+        $("app-error").textContent = "Axon couldn't be reached. Check your connection, then tap Open Axon again.";
+        $("app-error").hidden = false;
+        return;
+      }
+      timer = setTimeout(poll, 4000);
+    });
+  }
+  $("open-axon").addEventListener("click", function () {
+    // The link itself opens the app; this page starts asking at once.
+    $("waiting").hidden = false;
+    $("app-error").hidden = true;
+    misses = 0;
+    if (!polling) { polling = true; timer = setTimeout(poll, 1500); }
+  });
+  // Back from Axon: ask straight away rather than at the next tick.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && polling) poll();
   });
 
   $("code-form").addEventListener("submit", function (ev) {
@@ -85,8 +149,7 @@
     post("/oauth/approve", { request: handle, code: code }).then(function (r) {
       var back = r.status === 200 && r.body && safeBack(r.body.redirect);
       if (back) {
-        show("done");
-        window.location.replace(back);
+        leave(back);
         return;
       }
       var msg = (r.body && r.body.message) || "That didn't work. Start again from your assistant.";
@@ -98,8 +161,7 @@
         $("code").select();
         return;
       }
-      $("ended-text").textContent = msg;
-      show("ended");
+      end(msg);
     }, function () {
       err.textContent = "Axon couldn't be reached. Check your connection and try again.";
       err.hidden = false;
