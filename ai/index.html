@@ -15,7 +15,7 @@
       "headline": "Connect Axon to your AI assistant",
       "description": "Let Claude, ChatGPT or any assistant read your Axon scores: the steps, the MCP and OpenAPI addresses, what leaves your iPhone, and how switching it off deletes the copy.",
       "datePublished": "2026-10-10",
-      "dateModified": "2026-10-14",
+      "dateModified": "2026-11-08",
       "author": { "@type": "Organization", "name": "Axon" },
       "publisher": { "@type": "Organization", "name": "Axon" },
       "mainEntityOfPage": "https://jaygosalia4.github.io/axon-support/ai/"
@@ -26,7 +26,7 @@
         {
           "@type": "Question",
           "name": "Does my health data leave my iPhone?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Only if you switch the connection on in Profile → Connections. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy." }
+          "acceptedAnswer": { "@type": "Answer", "text": "Only if you switch the connection on in Profile → Connections. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key or a sign-in you allowed. Turning it off ends every sign-in and deletes the copy." }
         },
         {
           "@type": "Question",
@@ -36,7 +36,7 @@
         {
           "@type": "Question",
           "name": "What if I lose the key?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Make a new key on the same page in Axon. The old one stops working at once, and your assistant needs the new one." }
+          "acceptedAnswer": { "@type": "Answer", "text": "In Axon, open Your AI → Details → Make a new key. The old key stops working at once and the assistant that used it needs the new one. Claude sign-ins stay connected." }
         }
       ]
     }
@@ -46,26 +46,32 @@
 </head><body>
 <header><a class="logo" href="../"><div class="logo-dot"></div>Axon</a><nav><a href="../guides/">Guides</a><a href="../#faq">FAQ</a><a href="../#contact">Contact</a><a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md" target="_blank">Privacy</a></nav></header>
 <main>
-<p class="eyebrow">Axon 2.1 · Beta</p>
+<p class="eyebrow">Axon 2.2 · Beta</p>
 <h1>Connect Axon to your AI assistant</h1>
 <p class="lede">Ask Claude, ChatGPT or any assistant about your sleep, recovery and food, and get answers from the scores Axon already computes from your Apple Watch.</p>
-<p class="meta">By the Axon team · Updated 14 October 2026</p>
+<p class="meta">By the Axon team · Updated 8 November 2026</p>
 
-<div class="answer"><p><strong>The promise, in plain words.</strong> Your health data never leaves your phone — unless you say so. Switching this on says so: Axon keeps a copy of your scores and daily summaries so the assistant you choose can read it with your key. Switching it off deletes the copy. Nothing happens until you turn it on.</p></div>
+<div class="answer"><p><strong>The promise, in plain words.</strong> Your health data never leaves your phone — unless you say so. Switching this on says so: Axon keeps a copy of your scores and daily summaries so the assistant you choose can read it with your key or a sign-in you allowed. Switching it off deletes the copy. Nothing happens until you turn it on.</p></div>
 
 <h2>Before you start</h2>
 <ol>
-<li>Update Axon to 2.1 on your iPhone.</li>
-<li>Open <strong>Profile → Connections → Connect Axon to my AI assistant</strong> and tap <strong>Turn on</strong>.</li>
-<li>Axon shows your key once. Copy it — it starts with <code>axon_</code> — or tap <strong>Copy everything for your assistant</strong> for one message with the key and every address. Lost it? Make a new key on the same page; the old one stops working.</li>
-<li>Pick your assistant below. Axon's own page walks the same steps, with copy buttons.</li>
+<li>Update Axon to 2.2 on your iPhone.</li>
+<li>Open <strong>Profile → Connections → Your AI</strong>. It has one button each for <strong>Claude</strong>, <strong>ChatGPT</strong> and <strong>Other AI</strong>. Tapping one turns the connection on.</li>
+<li>Claude signs in, so there is nothing to copy. ChatGPT and other assistants use a key that starts with <code>axon_</code>; Axon shows it with a copy button. Lost it? <strong>Your AI → Details → Make a new key</strong>; the old one stops working.</li>
 </ol>
 
+<h2>Claude (claude.ai and the Claude apps)</h2>
+<ol>
+<li>In Axon, tap <strong>Claude</strong> on Your AI. Axon copies its address: <code>https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/mcp</code></li>
+<li>In Claude: <strong>Customize → Connectors → Add custom connector</strong>. Paste the address and add it.</li>
+<li>Claude opens Axon's sign-in page. Tap <strong>Open Axon</strong> and <strong>Allow</strong>, or tap <strong>Use a code instead</strong> and type the code Axon shows (it works once, for 10 minutes).</li>
+</ol>
+<p>Then start a new chat and ask how you slept this week. Once added on claude.ai, the connector follows your Claude account to the Claude apps. Custom connectors work on every Claude plan; the free plan allows one. Turning the connection off in Axon ends the sign-in.</p>
+
 <h2>Claude Code (on your Mac)</h2>
-<p>Paste this into Terminal, with your key in place of <code>axon_…</code>, and press Return:</p>
+<p>In Axon, tap <strong>Claude</strong> on Your AI, then <strong>Claude Code on a Mac</strong>, and copy the command. Or paste this into Terminal, with your key in place of <code>axon_…</code>, and press Return:</p>
 <pre><code>claude mcp add --scope user --transport http axon https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/mcp --header "Authorization: Bearer axon_…"</code></pre>
 <p>Then open Claude Code and ask how you slept this week. <code>--scope user</code> makes Axon available in every folder you open; without it, Claude Code keeps it for the current folder only. The command saves your key in Claude Code's own settings on that Mac.</p>
-<div class="callout"><strong>Claude Desktop, claude.ai and the Claude iPhone app</strong> add connectors with a sign-in that Axon doesn't offer yet. For now, Claude Code is the Claude that connects.</div>
 
 <h2>ChatGPT (a GPT of your own)</h2>
 <ol>
@@ -76,7 +82,7 @@
 <p>GPTs are made on chatgpt.com, not inside the ChatGPT iPhone app; once saved, you can use yours anywhere you use ChatGPT.</p>
 
 <h2>Any assistant</h2>
-<p><strong>One paste.</strong> On the key page (or Any assistant in Axon), tap <strong>Copy everything</strong> and paste it into the assistant's chat. It carries everything an assistant needs to connect on its own:</p>
+<p><strong>One paste.</strong> In Axon, tap <strong>Other AI</strong> on Your AI: it copies everything at once. Paste it into the assistant's chat. It carries everything an assistant needs to connect on its own:</p>
 <pre><code>Connect to Axon, my health app. It has an API you can read and write through.
 REST address: https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1
 API description (OpenAPI): https://qnpnvdainbakygnnktrn.supabase.co/functions/v1/ai/v1/openapi.json
@@ -100,8 +106,8 @@ How it works: https://jaygosalia4.github.io/axon-support/ai/</code></pre>
 <ul>
 <li><strong>Leaves, only while it's on:</strong> your scores and what drives them; sleep with bed and wake times and naps; heart, breathing rate, blood oxygen and wrist temperature; workouts, steps, energy, walking, daylight and sound levels; check-ins, food you logged in Axon, Fit Age, warnings and trends; your age, sex, height, weight, units and time zone. The last 120 days, then each new day.</li>
 <li><strong>Never leaves:</strong> raw Apple Health samples, your journal's words, your calendar, your name and your Apple ID. The copy is kept under a random ID.</li>
-<li><strong>Who can read it:</strong> an assistant only with your key. Axon's team can reach it to keep the service running, never for anything else. What your assistant's provider does with what it reads is covered by that provider's privacy policy.</li>
-<li><strong>Off deletes it:</strong> turning the connection off ends the key and deletes the copy and every pending request in one step. If your iPhone doesn't update it for 45 days, it is deleted by itself.</li>
+<li><strong>Who can read it:</strong> an assistant only with your key or a sign-in you allowed. Axon's team can reach it to keep the service running, never for anything else. What your assistant's provider does with what it reads is covered by that provider's privacy policy.</li>
+<li><strong>Off deletes it:</strong> turning the connection off ends the key and every sign-in, and deletes the copy and every pending request in one step. If your iPhone doesn't update it for 45 days, it is deleted by itself.</li>
 </ul>
 <p>The full detail is section 3a of the <a href="https://github.com/jaygosalia4/axon-support/blob/main/PRIVACY_POLICY.md">privacy policy</a>.</p>
 
@@ -117,14 +123,14 @@ How it works: https://jaygosalia4.github.io/axon-support/ai/</code></pre>
 <p><strong>Ask without the app name.</strong> Siri runs a shortcut by its name. In Axon, open <strong>Profile → Connections → Ask Axon with Siri</strong> and tap <strong>Add to Siri</strong> beside a question like "How am I doing today": Axon opens Shortcuts and walks you through three steps, once.</p>
 
 <h2>This is a beta</h2>
-<p>Both are new in Axon 2.1 and marked <strong>BETA</strong> in the app. Tell us what works and what doesn't: use <strong>Feedback</strong> in the app, or email <a href="mailto:support@axon-app.com">support@axon-app.com</a>. We read every message.</p>
+<p>The AI connection and Siri are marked <strong>BETA</strong> in the app. Tell us what works and what doesn't: use <strong>Feedback</strong> in the app, or email <a href="mailto:support@axon-app.com">support@axon-app.com</a>. We read every message.</p>
 
 <div class="cta"><h2>Your Apple Watch scores, wherever you ask</h2><p>Four daily scores, computed on your iPhone. Shared only when you say so.</p><a class="btn" href="https://apps.apple.com/app/apple-store/id6765889625?pt=128599363&ct=web-ai&mt=8">Get Axon on the App Store</a></div>
 
 <section class="faq" id="faq">
 <div class="faq-item"><p class="faq-q">Does my health data leave my iPhone?</p><p class="faq-a">Only if you switch the connection on in Profile → Connections. Then Axon keeps a copy of your scores and daily summaries — never raw Apple Health samples, your journal or your calendar — under a random ID, so your assistant can read it with your key. Turning it off deletes the copy.</p></div>
 <div class="faq-item"><p class="faq-q">Can my assistant change my data?</p><p class="faq-a">It can ask Axon to log a mood check-in, a meal or a nap, the same entries you make by hand. Each one appears the next time Axon updates on your iPhone. You can switch logging off and keep the connection read only.</p></div>
-<div class="faq-item"><p class="faq-q">What if I lose the key?</p><p class="faq-a">Make a new key on the same page in Axon. The old one stops working at once, and your assistant needs the new one.</p></div>
+<div class="faq-item"><p class="faq-q">What if I lose the key?</p><p class="faq-a">In Axon, open Your AI → Details → Make a new key. The old key stops working at once and the assistant that used it needs the new one. Claude sign-ins stay connected.</p></div>
 </section>
 
 <div class="related"><h2>Related</h2><ul>
