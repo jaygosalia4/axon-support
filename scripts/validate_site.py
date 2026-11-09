@@ -34,7 +34,7 @@ BASE = "https://jaygosalia4.github.io/axon-support/"
 APP_ID = "6765889625"
 BANNER = f"app-id={APP_ID}"
 VERIFICATION = "jQhoEPfLZvFM6E8T0clcdeWSMnvbtUtgvo2PqbN_13c"
-PRIVATE_DIRS = ("cockpit", "signin")  # out of search: the dashboard, and the AI sign-in page (Oct 2026)
+PRIVATE_DIRS = ("cockpit", "signin", "f")  # out of search: the dashboard, the AI sign-in page (Oct 2026), the Friends invite page (Nov 2026)
 
 TITLE_MAX = 70
 DESC_MIN, DESC_MAX = 70, 170
@@ -573,8 +573,39 @@ def main():
         if "window.top !== window.self" not in js:
             fail("signin/signin.js", "lost its frame check")
 
+    # --- the Friends invite page: the code rides in the fragment, so nothing else may run on it
+    invite = pages.get("f/index.html")
+    if invite is None:
+        failures.append("f/index.html: missing")
+    else:
+        csp = " ".join(re.findall(r'http-equiv="Content-Security-Policy" content="([^"]+)"', invite.raw))
+        for part in ("default-src 'none'", "script-src 'self'", "connect-src 'none'", "form-action 'none'", "base-uri 'none'"):
+            if part not in csp:
+                fail("f/index.html", f"content policy lost {part!r}")
+        if re.search(r"<script[^>]+src=\"(https?:)?//", invite.raw):
+            fail("f/index.html", "loads a script from another site")
+        if 'name="referrer" content="no-referrer"' not in invite.raw:
+            fail("f/index.html", "lost its no-referrer policy")
+        try:
+            with open(os.path.join(ROOT, "f", "friend.js"), encoding="utf-8") as fh:
+                fjs = fh.read()
+        except OSError:
+            fjs = ""
+            failures.append("f/friend.js: missing")
+        for banned, why in (("localStorage", "storage"), ("sessionStorage", "storage"), ("document.cookie", "cookies"),
+                            ("fetch(", "a network call"), ("XMLHttpRequest", "a network call"),
+                            ("gtag", "a tracker"), ("posthog", "a tracker")):
+            if banned in fjs:
+                fail("f/friend.js", f"uses {why} ({banned})")
+        if fjs.count("innerHTML") != 1 or 'document.documentElement.innerHTML = ""' not in fjs:
+            fail("f/friend.js", "writes HTML from data")
+        if "window.top !== window.self" not in fjs:
+            fail("f/friend.js", "lost its frame check")
+        if "ABCDEFGHJKMNPQRSTUVWXYZ23456789" not in fjs:
+            fail("f/friend.js", "lost the app's code alphabet")
+
     # --- report
-    print(f"Axon support site — {len(public)} public pages, {len(pages) - len(public)} private (cockpit, signin)")
+    print(f"Axon support site — {len(public)} public pages, {len(pages) - len(public)} private (cockpit, signin, f)")
     print(f"{'page':<62}{'words':>6}{'KB':>6}{'clicks':>7}  lastmod")
     for r in public:
         p = pages[r]
