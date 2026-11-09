@@ -526,7 +526,7 @@ const T = {
 const MIDNIGHT_FIX_VERSION = '1.9.5';
 // The version live on the App Store — a constant, never max(versions seen),
 // so one TestFlight phone cannot re-label the fleet. Move it at every release.
-const SHIPPED_VERSION = '2.1.2';
+const SHIPPED_VERSION = '2.2';
 
 // ── Fetch caps ────────────────────────────────────────────────────────────
 const FLEET_PAGE      = 1000;
@@ -667,6 +667,14 @@ const fetchProfiles = () => supaFetch('profiles', 'select=apple_user_id,created_
 // the whole tile unread until it is applied.
 const fetchFeedback = () => supaFetch('feedback',
   'select=*&order=created_at.desc&limit=500');
+// The AI tier's on-disk size, one reading a UTC day (Supabase/ai_tier_watch.sql — a POST
+// to a read-only function the dashboard's login may call). A missing function is a 404:
+// unread, never an empty history.
+async function fetchAiTier() {
+  const res = await authedFetch(`${SUPABASE_URL}/rest/v1/rpc/ai_admin_tier_history`, { method: 'POST', body: JSON.stringify({ p_days: 1100 }) });
+  if (!res.ok) throw httpError('ai_admin_tier_history', res.status);
+  return res.json();
+}
 // Written by the `store` feeder (public iTunes lookup, per storefront).
 const fetchStore = () => supaFetch('store_snapshot',
   'select=day,storefront,version,rating_count,avg_rating,text_reviews,taken_at&order=day.desc&limit=400');
@@ -678,7 +686,7 @@ const D = {
   fleet: null, fleetCapped: false, fleetCap: FLEET_PAGE * FLEET_MAX_PAGES,
   excluded: null, downloads: null, syncRuns: null,
   funnelLogs: null, funnelCapped: false,
-  writeFails: null, profiles: null, feedback: null, store: null,
+  writeFails: null, profiles: null, feedback: null, store: null, aiTier: null,
   sourceErrors: {},
   demo: false,
 };
@@ -689,7 +697,7 @@ async function fetchAll() {
   const errors = [];
   const note = (table) => (e) => { errors.push(e); D.sourceErrors[table] = shortErr(e); return null; };
   try {
-    const [fleet, excl, dls, runs, funnel, wf, profs, fbs, store] = await Promise.all([
+    const [fleet, excl, dls, runs, funnel, wf, profs, fbs, store, aiTier] = await Promise.all([
       fetchFleet().catch(note('fleet_events')),
       fetchExcluded().catch(note('fleet_excluded_persons')),
       fetchDownloads().catch(note('asc_downloads_daily')),
@@ -699,6 +707,7 @@ async function fetchAll() {
       fetchProfiles().catch(note('profiles')),
       fetchFeedback().catch(note('feedback')),
       fetchStore().catch(note('store_snapshot')),
+      fetchAiTier().catch(note('ai_admin_tier_history')),
     ]);
     if (fleet)  { D.fleet = fleet.rows; D.fleetCapped = fleet.capped; D.fleetCap = fleet.cap; D.sourceErrors['fleet_events'] = null; }
     if (excl)   D.excluded = excl;
@@ -709,6 +718,7 @@ async function fetchAll() {
     if (profs)  D.profiles = profs;
     if (fbs)    D.feedback = fbs;
     if (store)  D.store = store;
+    if (aiTier) D.aiTier = aiTier;
 
     invalidate();
     render();
@@ -811,6 +821,27 @@ function localHour(iso, tz) {
   const h = Number(f.format(new Date(t)));
   if (!Number.isFinite(h)) return null;
   return h === 24 ? 0 : h;
+}
+/// The user's local DAY ('YYYY-MM-DD') from the row's own IANA zone — the
+/// first-day tiles only (first-day audit G4, Oct 17 2026); every other tile
+/// stays on IST days. A missing or unparseable zone returns null: the row is
+/// left out and counted, never put on a guessed day.
+const _tzDayCache = new Map();
+function localDay(iso, tz) {
+  if (!tz || typeof tz !== 'string') return null;
+  let f = _tzDayCache.get(tz);
+  if (f === undefined) {
+    try { f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }); }
+    catch { f = null; }
+    _tzDayCache.set(tz, f);
+  }
+  if (!f) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  const parts = Object.create(null);
+  for (const x of f.formatToParts(new Date(t))) parts[x.type] = x.value;
+  const day = `${parts.year}-${parts.month}-${parts.day}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
 // ── Numbers ───────────────────────────────────────────────────────────────
@@ -1068,9 +1099,14 @@ function anonId(id) {
 }
 
 // ── Common person tests ───────────────────────────────────────────────────
-const hkGranted   = p => { const f = p.first['healthkit_authorized']; return !!f && tokenBool(f.data, 'granted') === true; };
+/// Health granted = ANY `granted:true` row, never the first row (first-day
+/// audit G1): the app sends at most one false and one true, and a decliner
+/// rescued by the Health page sends the false first.
+const hkGranted   = p => (p.rows || []).some(r => r.event === 'healthkit_authorized' && tokenBool(r.data, 'granted') === true);
 const hkDenied    = p => (p.rows || []).some(r => r.event === 'healthkit_authorized' && tokenBool(r.data, 'granted') === false);
-const syncedOk    = p => (p.rows || []).some(r => r.event === 'sync_completed' && r.data === 'ok');
+/// A landed sync = ANY `sync_completed` row (G2): `no_watch_data` (no Watch, or
+/// not worn overnight), `partial` and `day_not_started` are syncs that worked.
+const syncLanded  = p => (p.rows || []).some(r => r.event === 'sync_completed');
 const firstScore  = p => p.first['score_visible'] || null;
 const onboarded   = p => !!p.first['onboarding_complete'];
 function latestRow(p, event) {
@@ -1284,7 +1320,7 @@ function installFunnel(cohort) {
     { key: 'launch',  label: 'First launch',        test: () => true },
     { key: 'onboard', label: 'Finished onboarding', test: onboarded },
     { key: 'health',  label: 'Granted Health',      test: hkGranted },
-    { key: 'sync',    label: 'First sync landed',   test: syncedOk },
+    { key: 'sync',    label: 'First sync landed',   test: syncLanded },
     { key: 'score',   label: 'Saw a score',         test: p => !!firstScore(p) },
     { key: 'day2',    label: 'Came back day 2',     test: returnedD2 },
   ];
@@ -1298,6 +1334,253 @@ function worstFunnelDrop(steps) {
     if (lost > worst.lost) worst = { from: steps[i - 1].label, to: steps[i].label, lost };
   }
   return worst;
+}
+
+// ── The first day (first-day score audit, Oct 17 2026 — fix 1) ────────────
+/// Every reducer below reads days on the ROW'S OWN zone (G4), never IST; the
+/// rest of the page stays on IST. A row with no zone borrows its install's.
+///
+/// ⛔ G3: a RETURN needs a foreground event. A HealthKit background wake logs
+/// `score_computed`, `vo2max_coverage` and `anchor_freeze` with nobody there,
+/// and the feeder (`z-ops/axon-warehouse-sync.py`) keeps every row — it filters
+/// only `$lib`, simulators, TestFlight and `$` events, and records no
+/// foreground flag. The first four fire only from `MainTabView`, i.e. after
+/// onboarding (`VitalScoreApp.swift`: scene active, tab change, background);
+/// a person still in onboarding sends none of them, so a rendered onboarding
+/// page counts too (`OnboardingView.swift` — never from a wake).
+const FOREGROUND_EVENTS = new Set(['app_open', 'session_state', 'tab_viewed', 'app_close', 'onboarding_step', 'onboarding_complete']);
+/// Is this row a foreground event that happened on `day`? `app_close` is sent
+/// when a session ENDS, with its length in `s:` — a session opened before
+/// midnight is a return only if it started on `day`.
+function foregroundOn(r, day, zone) {
+  if (!FOREGROUND_EVENTS.has(r.event)) return false;
+  let ts = r.ts;
+  if (r.event === 'app_close') {
+    const secs = tokenInt(r.data, 's');
+    const end = new Date(r.ts).getTime();
+    if (secs !== null && Number.isFinite(end)) ts = new Date(end - secs * 1000).toISOString();
+  }
+  return localDay(ts, r.tz || zone) === day;
+}
+/// A sync outcome logged AFTER a first-sync state proves the day was read
+/// again with the person still there (`syncAndLoad` logs `sync_completed` /
+/// `sync_failed` before the state). An install whose first run ended in the
+/// never-logged `.freshDay` (before 09:00, history read, nothing yet today)
+/// sends `syncing` and then exactly such a row.
+const syncAfter = (rows, ts) => rows.some(r => (r.event === 'sync_completed' || r.event === 'sync_failed') && r.ts > ts);
+/// A fresh install before this local hour has no night yet on its new day —
+/// the app's own `OpenDay.cutoffHour` (G12). A band edge, not a bar.
+const OPEN_DAY_CUTOFF_HOUR = 9;
+/// Every zone's day D is over once the IST day reaches D + 2 (no zone is more
+/// than 14 h behind UTC), so a local day counts only when it is that old.
+const localDayIsOver = (day, today) => !!day && day <= shiftDay(today, -2);
+
+/// One install's first local day: the zone, the day, the install hour, and its
+/// rows on that day and the next. null = no `app_first_launch`; `zone: false` =
+/// the first launch carried no readable zone (left out and counted).
+function firstDayOf(p) {
+  const fl = p.first['app_first_launch'];
+  if (!fl) return null;
+  const flRow = (p.rows || []).find(r => r.event === 'app_first_launch' && r.ts === fl.ts) || { ts: fl.ts, tz: null };
+  const zone = flRow.tz || null;
+  const day0 = localDay(flRow.ts, zone);
+  if (!day0) return { zone: false };
+  const day1 = shiftDay(day0, 1);
+  const rows0 = [];
+  let back = false;
+  for (const r of p.rows || []) {
+    if (localDay(r.ts, r.tz || zone) === day0) rows0.push(r);
+    if (!back && foregroundOn(r, day1, zone)) back = true;
+  }
+  return { zone: true, day0, day1, hour: localHour(flRow.ts, zone), rows0, back };
+}
+
+/// The groups, in the audit's order (§4). Each install lands in the FIRST that
+/// applies. Rows are named for what was measured: Apple hides a decline, so
+/// "Health shared nothing", never "Declined" (G10).
+const FIRST_DAY_GROUPS = [
+  { key: 'onboarding', label: 'Left during onboarding' },
+  { key: 'health_nothing', label: 'Health shared nothing' },
+  { key: 'reading', label: 'Stopped while reading history' },
+  { key: 'no_watch', label: 'Home, no score · no Watch paired' },
+  { key: 'watch_unknown', label: 'Home, no score · Watch paired or not reported' },
+  { key: 'score', label: 'Saw a score' },
+];
+const syncStateOf = r => tokens(r.data)['state'];
+/// The group for one install's first local day (`firstDayOf`).
+///   onboarding     no `onboarding_complete` that day (no score is possible before it)
+///   score          `score_visible` that day
+///   health_nothing `healthkit_authorized granted:false` or `first_sync_state access_blocked`,
+///                  and no `granted:true` or `ready` the same day
+///   reading        every `first_sync_state` that day is `syncing`, and no sync was logged after it
+///                  (a later sync row = a `.freshDay` first run, never logged — the person is on Home)
+///   no_watch       the day's latest `watch_state` says `paired:false`
+///   watch_unknown  everyone else (paired, or the phone could not say)
+function firstDayPlace(fd) {
+  const has = (event, test) => fd.rows0.some(r => r.event === event && (!test || test(r)));
+  if (!has('onboarding_complete')) return 'onboarding';
+  if (has('score_visible')) return 'score';
+  const nothing = has('healthkit_authorized', r => tokenBool(r.data, 'granted') === false) || has('first_sync_state', r => syncStateOf(r) === 'access_blocked');
+  const something = has('healthkit_authorized', r => tokenBool(r.data, 'granted') === true) || has('first_sync_state', r => syncStateOf(r) === 'ready');
+  if (nothing && !something) return 'health_nothing';
+  const fss = fd.rows0.filter(r => r.event === 'first_sync_state');
+  if (fss.length && fss.every(r => syncStateOf(r) === 'syncing') && !syncAfter(fd.rows0, fss.reduce((a, r) => (r.ts > a ? r.ts : a), ''))) return 'reading';
+  let watch = null;
+  for (const r of fd.rows0) if (r.event === 'watch_state' && (!watch || r.ts > watch.ts)) watch = r;
+  if (watch && tokenBool(watch.data, 'paired') === false) return 'no_watch';
+  return 'watch_unknown';
+}
+/// "First day: where each install ended up". Installs whose first LOCAL day is
+/// in `days` and is over everywhere; each in one group, with who came back the
+/// next local day (a foreground event, among installs whose next day is over)
+/// and who installed between 00:00 and 09:00 local.
+function firstDayPlaces(idx, days, today) {
+  const set = new Set(days);
+  const groups = FIRST_DAY_GROUPS.map(g => ({ key: g.key, label: g.label, people: [], eligible: [], back: [], night: [] }));
+  const byKey = new Map(groups.map(g => [g.key, g]));
+  const noZone = [], running = [];
+  for (const p of idx.cohorted) {
+    const fd = firstDayOf(p);
+    if (!fd) continue;
+    if (!fd.zone) { if (set.has(p.firstLaunchDay)) noZone.push(p); continue; }
+    if (!set.has(fd.day0)) continue;
+    if (!localDayIsOver(fd.day0, today)) { running.push(p); continue; }
+    const g = byKey.get(firstDayPlace(fd));
+    g.people.push(p);
+    if (fd.hour !== null && fd.hour < OPEN_DAY_CUTOFF_HOUR) g.night.push(p);
+    if (localDayIsOver(fd.day1, today)) {
+      g.eligible.push(p);
+      if (fd.back) g.back.push(p);
+    }
+  }
+  const total = groups.reduce((a, g) => a + g.people.length, 0);
+  return {
+    groups: groups.map(g => ({ ...g, n: g.people.length, share: rate(g.people.length, total), backRate: rate(g.back.length, g.eligible.length) })),
+    total, noZone, running,
+    eligible: groups.reduce((a, g) => a + g.eligible.length, 0),
+    back: groups.reduce((a, g) => a + g.back.length, 0),
+    night: groups.reduce((a, g) => a + g.night.length, 0),
+  };
+}
+
+/// "Apple Health page: shown, tapped, reached a score" (G5). The population is
+/// people whose FIRST page-B row from a 2.1+ build falls in `days` (local day):
+/// on 2.0/2.0.1 page B was drawn falsely for 25 of 28 new installs, so older
+/// rows are left out and counted. Taps, ready and score are read from that row
+/// on — each a share of the people shown, not a chain.
+const HEALTH_PAGE_FROM_VERSION = '2.1';
+const HEALTH_PAGE_TAPS = [
+  { key: 'open_health', label: 'Tapped Open Health' },
+  { key: 'open_settings', label: 'Tapped Open Settings (iOS would not open Health)' },
+  { key: 'check_again', label: 'Tapped Check again' },
+];
+const isFrom21 = r => !!r.v && semverCmp(r.v, HEALTH_PAGE_FROM_VERSION) >= 0;
+function healthPage(idx, days) {
+  const set = new Set(days);
+  const shown = [], tapped = [], ready = [], score = [], older = [], aShown = [], aTapped = [];
+  const byTap = new Map(HEALTH_PAGE_TAPS.map(t => [t.key, []]));
+  for (const p of idx.list) {
+    const rows = [...(p.rows || [])].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+    const zone = (rows.find(r => r.tz) || {}).tz || null;
+    const dayOf = r => localDay(r.ts, r.tz || zone);
+    const pageRows = page => rows.filter(r => r.event === 'health_access_shown' && tokens(r.data)['state'] === page);
+    const b = pageRows('b');
+    const b21 = b.filter(isFrom21);
+    if (b21.length && set.has(dayOf(b21[0]))) {
+      const from = b21[0].ts;
+      const after = rows.filter(r => r.ts >= from);
+      shown.push(p);
+      let anyTap = false;
+      for (const t of HEALTH_PAGE_TAPS) if (after.some(r => r.event === 'health_access_cta' && r.data === t.key)) { byTap.get(t.key).push(p); anyTap = true; }
+      if (anyTap) tapped.push(p);
+      if (after.some(r => r.event === 'first_sync_state' && syncStateOf(r) === 'ready')) ready.push(p);
+      if (after.some(r => r.event === 'score_visible')) score.push(p);
+    } else if (!b21.length && b.some(r => set.has(dayOf(r)))) older.push(p);
+    const a21 = pageRows('a').filter(isFrom21);
+    if (a21.length && set.has(dayOf(a21[0]))) {
+      aShown.push(p);
+      if (rows.some(r => r.ts >= a21[0].ts && r.event === 'health_access_cta' && r.data === 'connect')) aTapped.push(p);
+    }
+  }
+  const of = list => rate(list.length, shown.length);
+  return {
+    shown, older, aShown, aTapped,
+    steps: [
+      ...HEALTH_PAGE_TAPS.map(t => ({ key: t.key, label: t.label, people: byTap.get(t.key) })),
+      { key: 'any_tap', label: 'Tapped any of them', people: tapped },
+      { key: 'ready', label: 'Health then shared data (first sync reached ready)', people: ready },
+      { key: 'score', label: 'Then saw a score', people: score },
+    ].map(s => ({ ...s, n: s.people.length, rate: of(s.people) })),
+  };
+}
+
+/// "Onboarding: last page reached" (G6). Installs whose first local day is in
+/// `days` and over, and who sent no `onboarding_complete` that day — the same
+/// test as the first-day tile's "Left during onboarding": the furthest
+/// page each reached (`onboarding_step page:<1–4>` fires on every page change,
+/// a swipe back included; the Welcome page is never logged, so no row = page 1)
+/// and whether they answered the Health sheet (any `healthkit_authorized`).
+const ONBOARDING_PAGES = ['Welcome', 'How your scores work', 'Your daily routine', 'Connect Apple Health', 'Two quick things'];
+function onboardingLeft(idx, days, today) {
+  const set = new Set(days);
+  const pages = ONBOARDING_PAGES.map((name, i) => ({ page: i, label: `${i + 1} · ${name}`, people: [], answered: [] }));
+  let installs = 0, finished = 0, laterFinished = 0;
+  const noZone = [];
+  for (const p of idx.cohorted) {
+    const fd = firstDayOf(p);
+    if (!fd) continue;
+    if (!fd.zone) { if (set.has(p.firstLaunchDay)) noZone.push(p); continue; }
+    if (!set.has(fd.day0) || !localDayIsOver(fd.day0, today)) continue;
+    installs++;
+    if (fd.rows0.some(r => r.event === 'onboarding_complete')) { finished++; continue; }
+    if (p.rows.some(r => r.event === 'onboarding_complete')) laterFinished++;
+    let furthest = 0;
+    for (const r of p.rows) if (r.event === 'onboarding_step') { const n = tokenInt(r.data, 'page'); if (n !== null && n < ONBOARDING_PAGES.length && n > furthest) furthest = n; }
+    pages[furthest].people.push(p);
+    if (p.rows.some(r => r.event === 'healthkit_authorized')) pages[furthest].answered.push(p);
+  }
+  const left = pages.reduce((a, g) => a + g.people.length, 0);
+  return { installs, finished, left, laterFinished, noZone, pages: pages.map(g => ({ ...g, n: g.people.length, answeredRate: rate(g.answered.length, g.people.length) })) };
+}
+
+/// "Health shared nothing: the wait before the Health page" (G11). From the
+/// install's `first_sync_state syncing` to its `access_blocked` — each state is
+/// logged once per install, so this is the FIRST launch's wait. Counts per
+/// coarse band only; no one's own seconds are ever printed.
+const WAIT_BANDS = [
+  { key: 'b10s', label: 'under 10 seconds', upTo: 10 },
+  { key: 'b30s', label: '10 to 30 seconds', upTo: 30 },
+  { key: 'b1m', label: '30 seconds to 1 minute', upTo: 60 },
+  { key: 'b3m', label: '1 to 3 minutes', upTo: 180 },
+  { key: 'b10m', label: '3 to 10 minutes', upTo: 600 },
+  { key: 'b10mplus', label: '10 minutes or more', upTo: Infinity },
+];
+function healthWait(idx, days, today) {
+  const set = new Set(days);
+  const bands = WAIT_BANDS.map(b => ({ key: b.key, label: b.label, people: [] }));
+  const stopped = [], noZone = [];
+  for (const p of idx.list) {
+    let syncing = null, blocked = null, other = false;
+    for (const r of p.rows || []) {
+      if (r.event !== 'first_sync_state') continue;
+      const s = syncStateOf(r);
+      if (s === 'syncing') { if (!syncing || r.ts < syncing.ts) syncing = r; }
+      else if (s === 'access_blocked') { if (!blocked || r.ts < blocked.ts) blocked = r; }
+      else other = true;
+    }
+    if (!syncing) continue;
+    const zone = syncing.tz || ((p.rows || []).find(r => r.tz) || {}).tz || null;
+    const day = localDay(syncing.ts, zone);
+    if (!day) { if (blocked || !other) noZone.push(p); continue; }
+    if (!set.has(day) || !localDayIsOver(day, today)) continue;
+    if (blocked) {
+      const secs = (new Date(blocked.ts).getTime() - new Date(syncing.ts).getTime()) / 1000;
+      if (!Number.isFinite(secs) || secs < 0) continue;
+      bands[WAIT_BANDS.findIndex(b => secs < b.upTo)].people.push(p);
+    } else if (!other && !syncAfter(p.rows || [], syncing.ts)) stopped.push(p);
+  }
+  const reached = bands.reduce((a, b) => a + b.people.length, 0);
+  return { bands: bands.map(b => ({ ...b, n: b.people.length })), reached, stopped, noZone };
 }
 
 // ══ 3. RETENTION ══════════════════════════════════════════════════════════
@@ -1530,6 +1813,8 @@ const ASK_AXON_ITEMS = [
 /// A payload `kind:<token>`; a missing or odd one is named, never dropped.
 const payloadKind = data => { const k = tokens(data)['kind']; return typeof k === 'string' && /^[a-z_]{1,24}$/.test(k) ? k : 'unrecognised'; };
 /// A bare payload token (`granted`, `ok`) under the same rule.
+/// A `state:<token>` payload (ai_signin_code) under the same rule.
+const payloadState = data => { const k = tokens(data)['state']; return typeof k === 'string' && /^[a-z_]{1,24}$/.test(k) ? k : 'unrecognised'; };
 const bareToken = data => { const k = typeof data === 'string' ? data.trim() : ''; return /^[a-z_]{1,24}$/.test(k) ? k : 'unrecognised'; };
 /// Runs and distinct people per payload group, one event, one window.
 function eventGroups(idx, days, event, keyOf) {
@@ -1575,6 +1860,8 @@ function aiUse(idx, days) {
     known: known.length, conn: rate(conn.length, known.length), connIds: idsOf(conn),
     states: { on: idsOf(on), read_only: idsOf(ro), off: idsOf(off) },
     inbox: eventGroups(idx, days, 'ai_inbox_applied', payloadKind),
+    signin: eventGroups(idx, days, 'ai_signin_code', payloadState),
+    approve: eventGroups(idx, days, 'ai_signin_approve', payloadState),
     fail: rate(failed.size, syncers.size), failedIds: failed, syncIds: syncers,
   };
 }
@@ -1688,6 +1975,20 @@ function eventCount(idx, days, event) {
   return { rows, persons: ids.size, ids };
 }
 
+/// The AI tier's size per day in `days`: bytes where a reading exists, null where none —
+/// a day with no reading is a gap, never a zero. Readings are UTC days (ai_tier_size_daily).
+/// History only (D-37): the ceiling is a control-panel fact and is never read here.
+function aiTierSeries(rows, days) {
+  if (!rows) return null;
+  const byDay = new Map();
+  for (const r of rows) if (r && isDayStr(String(r.day)) && Number.isFinite(Number(r.bytes))) byDay.set(String(r.day), Number(r.bytes));
+  const values = days.map(d => (byDay.has(d) ? byDay.get(d) : null));
+  let last = null;
+  for (let i = days.length - 1; i >= 0; i--) if (values[i] !== null) { last = { day: days[i], bytes: values[i] }; break; }
+  return { values, readings: values.filter(v => v !== null).length, last };
+}
+const fmtMB = v => (v === null || v === undefined || !Number.isFinite(v)) ? '—' : `${(v / 1048576).toFixed(1)} MB`;
+
 // ══ 6. ERRORS ═════════════════════════════════════════════════════════════
 /// `sign_in` payloads: `success` · `failure:cancelled` · `failure:error:<cause>`
 /// (1.9.1+) · `failure:error` (older builds, cause not recorded) · `failure`.
@@ -1754,6 +2055,21 @@ function firstSyncWorst(idx, days) {
 }
 /// Try Again taps (`first_sync_retried from:<x>|to:<y>`): taps, and the share
 /// that landed on ready. Per TAP — four failed retries by one person stay four.
+/// G8 (first-day audit): `ready` means "today holds any data", steps included,
+/// so it says nothing about a score. Of the installs that reached ready: who
+/// had a `score_visible` on the local day of their ready row, and who did not.
+function firstSyncReadySplit(idx, days) {
+  const ready = firstSyncWorst(idx, days).rows.find(r => r.state === 'ready').people;
+  const scored = [], none = [];
+  for (const p of ready) {
+    const zone = ((p.rows || []).find(r => r.tz) || {}).tz || null;
+    let first = null;
+    for (const r of p.rows) if (r.event === 'first_sync_state' && syncStateOf(r) === 'ready' && (!first || r.ts < first.ts)) first = r;
+    const d = first ? localDay(first.ts, first.tz || zone) : null;
+    (d && p.rows.some(r => r.event === 'score_visible' && localDay(r.ts, r.tz || zone) === d) ? scored : none).push(p);
+  }
+  return { scored, none };
+}
 function firstSyncRetries(idx, days) {
   const set = new Set(days);
   let taps = 0, ready = 0;
@@ -2460,7 +2776,7 @@ const TILES = [
   },
   {
     id: 'new.funnel', section: 'new', wide: true, title: 'Funnel by install week',
-    def: 'Downloaded (App Store) → opened the app → granted Health → saw a first score → came back the next day. Every step after the first is the same people.',
+    def: 'Downloaded (App Store) → opened the app → granted Health (any granted:true) → saw a first score → came back the next day. Every step after the first is the same people.',
     natural: { weeks: 6 }, maxWeeks: 10, filters: BOTH,
     view(cx) {
       const u = needIdx(cx); if (u) return u;
@@ -2501,7 +2817,7 @@ const TILES = [
   },
   {
     id: 'new.steps', section: 'new', title: 'First launch to day 2, every step',
-    def: 'Installs whose first launch fell in the range, through each step in order. Each step is the same people as the one before; percentages are of first launches.',
+    def: 'Installs whose first launch fell in the range, step by step. Granted Health = any granted:true; first sync = any sync_completed. Each step is the same people; % of first launches.',
     natural: { days: 30 }, filters: BOTH,
     view(cx) {
       const u = needIdx(cx); if (u) return u;
@@ -2523,6 +2839,130 @@ const TILES = [
       const [, k] = splitKey(key);
       const st = installFunnel(installsIn(cx.idx, cx.days)).find(s => s.key === k);
       return peopleTable(st ? st.people : [], `${st ? st.label : k} · ${st ? st.n : 0} people`);
+    },
+  },
+  {
+    id: 'new.firstday', section: 'new', wide: true, title: 'First day: where each install ended up',
+    def: 'Installs by first local day, each in the first group that fits. Back = a foreground event the next local day. Days use each row’s own zone; other tiles stay on IST.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const f = firstDayPlaces(cx.idx, cx.days, cx.today);
+      const left = (f.noZone.length ? ` ${f.noZone.length} left out: no readable zone.` : '') + (f.running.length ? ` ${f.running.length} left out: their first local day may still be running.` : '');
+      if (!f.total) return emptyHtml('No install in this range has a finished first local day yet.') + (left ? `<div class="gap-note">${escHtml(left.trim())}</div>` : '');
+      const score = f.groups.find(g => g.key === 'score');
+      const cnt = (n, r) => `<b>${fmtInt(n)}</b>${r.known ? ` <span class="qual">${escHtml(r.directional ? `of ${r.n}` : Math.round(r.pct) + '%')}</span>` : ''}`;
+      const cell = (g, part, n, html, tip) => `<td class="num"${n ? drillAttr(this.id, `g|${g.key}|${part}`, tip) : ` title="${escHtml(tip)}"`}>${html}</td>`;
+      const body = f.groups.map(g => `<tr><td>${escHtml(g.label)}</td>`
+        + cell(g, 'all', g.n, cnt(g.n, g.share), `${g.label}: ${g.n} of ${f.total} installs`)
+        + cell(g, 'back', g.back.length, g.eligible.length ? cnt(g.back.length, g.backRate) : '<span class="dash">—</span>', `${g.label}: ${g.back.length} of ${g.eligible.length} came back the next local day`)
+        + cell(g, 'night', g.night.length, `<b>${fmtInt(g.night.length)}</b>`, `${g.label}: ${g.night.length} installed 00:00–09:00 local`) + '</tr>').join('');
+      const foot = `<tr><td class="dim">All installs</td><td class="num dim">${fmtInt(f.total)}</td><td class="num dim">${f.eligible ? escHtml(rate(f.back, f.eligible).text) : '—'}</td><td class="num dim">${fmtInt(f.night)}</td></tr>`;
+      return `<div class="kpis">${kpi('Installs', fmtInt(f.total), cx.label)}${kpi('Saw a score on day one', rateVal(score.share, true), rateSub(score.share, 'installs'))}${kpi('Installed 00:00–09:00 local', fmtInt(f.night), 'of ' + fmtInt(f.total) + ' installs', null, true)}</div>
+        <div class="tbl-wrap"><table class="t"><thead><tr><th>Ended up</th><th class="num">Installs</th><th class="num">Came back next local day</th><th class="num">Installed 00:00–09:00</th></tr></thead><tbody>${body}${foot}</tbody></table></div>
+        <div class="gap-note">Each install sits in the first group that fits, top to bottom. “of n” = under 20, directional. Came back = a foreground event the next local day (app_open, session_state, tab_viewed, an onboarding page, or app_close by when its session began), never a background wake; installs whose next local day is over.${escHtml(left)}</div>`;
+    },
+    table(cx) {
+      const f = firstDayPlaces(cx.idx, cx.days, cx.today);
+      return { cols: [{ key: 'label', label: 'Ended up' }, { key: 'n', label: 'Installs', num: true }, { key: 'back', label: 'Came back next local day', num: true }, { key: 'eligible', label: 'Next local day over', num: true }, { key: 'night', label: 'Installed 00:00–09:00', num: true }],
+               rows: f.groups.map(g => ({ label: g.label, n: g.n, back: g.back.length, eligible: g.eligible.length, night: g.night.length, _drill: g.n ? `g|${g.key}|all` : null })) };
+    },
+    drill(key, cx) {
+      const [, rest] = splitKey(key);
+      const [gk, part] = splitKey(rest);
+      const g = firstDayPlaces(cx.idx, cx.days, cx.today).groups.find(x => x.key === gk);
+      const list = !g ? [] : part === 'back' ? g.back : part === 'night' ? g.night : g.people;
+      const what = part === 'back' ? 'came back the next local day' : part === 'night' ? 'installed 00:00–09:00 local' : 'installs';
+      return peopleTable(list, `${g ? g.label : gk} · ${list.length} ${what}`);
+    },
+  },
+  {
+    id: 'new.healthpage', section: 'new', title: 'Apple Health page: shown, tapped, reached a score',
+    def: 'People shown page B on a 2.1+ build (older builds drew it falsely), then what they did. Each row is a share of those shown. Local days; other tiles stay on IST.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const h = healthPage(cx.idx, cx.days);
+      const notes = [`Page A (the sheet can still be shown): ${h.aShown.length} shown · ${h.aTapped.length} tapped Connect.`];
+      if (h.older.length) notes.push(`${h.older.length} shown page B only on a build before 2.1 (or one with no version), left out.`);
+      const score = h.steps.find(s => s.key === 'score');
+      return `<div class="kpis">${kpi('Shown page B', fmtInt(h.shown.length), cx.label + ' · 2.1+')}${kpi('Then saw a score', rateVal(score.rate, true), rateSub(score.rate, 'people shown'))}</div>`
+        + (h.shown.length
+          ? barRows(h.steps.map(s => ({ name: s.label, count: s.n, key: s.key, rate: s.rate })), SERIES[1],
+              { tileId: this.id, drill: r => (r.count ? 'step|' + r.key : null), fmt: r => `<b>${escHtml(fmtInt(r.count))}</b> · ${escHtml(r.rate.text)}` })
+          : emptyHtml('Nobody was shown page B on a 2.1+ build in this range.'))
+        + `<div class="gap-note"${h.aShown.length ? drillAttr(this.id, 'a|shown', 'People shown page A') : ''}>${escHtml(notes.join(' '))}</div>`;
+    },
+    table(cx) {
+      const h = healthPage(cx.idx, cx.days);
+      return { cols: [{ key: 'label', label: 'Step' }, { key: 'n', label: 'People', num: true }, { key: 'pct', label: 'Of those shown', num: true, fmt: (v, r) => r.txt }],
+               rows: [{ label: 'Shown page B (2.1+)', n: h.shown.length, pct: null, txt: '—', _drill: h.shown.length ? 'shown|b' : null },
+                      ...h.steps.map(s => ({ label: s.label, n: s.n, pct: s.rate.pct, txt: s.rate.text, _drill: s.n ? 'step|' + s.key : null })),
+                      { label: 'Shown page A (2.1+)', n: h.aShown.length, pct: null, txt: '—', _drill: h.aShown.length ? 'a|shown' : null },
+                      { label: 'Tapped Connect on page A', n: h.aTapped.length, pct: null, txt: '—', _drill: h.aTapped.length ? 'a|tapped' : null }] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      const h = healthPage(cx.idx, cx.days);
+      if (k === 'shown') return peopleTable(h.shown, `Shown page B on 2.1+ · ${h.shown.length} people`);
+      if (k === 'a') { const list = v === 'tapped' ? h.aTapped : h.aShown; return peopleTable(list, `${v === 'tapped' ? 'Tapped Connect on page A' : 'Shown page A on 2.1+'} · ${list.length} people`); }
+      const s = h.steps.find(x => x.key === v);
+      return peopleTable(s ? s.people : [], `${s ? s.label : v} · ${s ? s.n : 0} of ${h.shown.length} shown page B`);
+    },
+  },
+  {
+    id: 'new.onboarding', section: 'new', title: 'Onboarding: last page reached',
+    def: 'Installs that did not finish onboarding on their first local day: the furthest page each reached, and whether the Health sheet was answered. Local days; other tiles stay on IST.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const o = onboardingLeft(cx.idx, cx.days, cx.today);
+      if (!o.installs) return emptyHtml('No install in this range has a finished first local day yet.');
+      const fin = rate(o.finished, o.installs);
+      return `<div class="kpis">${kpi('Installs', fmtInt(o.installs), cx.label)}${kpi('Finished on day one', rateVal(fin, true), rateSub(fin, 'installs'))}${kpi('Did not finish that day', fmtInt(o.left), o.laterFinished ? `${o.laterFinished} finished on a later day` : 'installs', null, true)}</div>`
+        + (o.left
+          ? barRows(o.pages.map(g => ({ name: g.label, count: g.n, key: String(g.page), answered: g.answered.length })), SERIES[2],
+              { tileId: this.id, drill: r => (r.count ? 'page|' + r.key : null), fmt: r => `<b>${escHtml(fmtInt(r.count))}</b>${r.count ? ` · answered the Health sheet ${escHtml(fmtInt(r.answered))}` : ''}` })
+          : emptyHtml('Every install in this range finished onboarding on its first local day.'))
+        + `<div class="gap-note">Furthest page, because a swipe back logs the earlier page again. The Welcome page is never logged. Where a leaver’s Watch stands is unknown: watch_state fires only after onboarding.${o.noZone.length ? ` ${o.noZone.length} left out: no readable zone.` : ''}</div>`;
+    },
+    table(cx) {
+      const o = onboardingLeft(cx.idx, cx.days, cx.today);
+      return { cols: [{ key: 'label', label: 'Furthest page' }, { key: 'n', label: 'Installs', num: true }, { key: 'answered', label: 'Answered the Health sheet', num: true }],
+               rows: o.pages.map(g => ({ label: g.label, n: g.n, answered: g.answered.length, _drill: g.n ? 'page|' + g.page : null })) };
+    },
+    drill(key, cx) {
+      const [, v] = splitKey(key);
+      const g = onboardingLeft(cx.idx, cx.days, cx.today).pages[Number(v)];
+      return peopleTable(g ? g.people : [], `Stopped at ${g ? g.label : v} · ${g ? g.n : 0} installs`);
+    },
+  },
+  {
+    id: 'new.healthwait', section: 'new', title: 'Health shared nothing: the wait before the Health page',
+    def: 'first_sync_state syncing to access_blocked on the first launch, in bands: how long the count ran before the Health page. Counts only. Local days; other tiles stay on IST.',
+    natural: { days: 30 }, filters: BOTH,
+    view(cx) {
+      const u = needIdx(cx); if (u) return u;
+      const w = healthWait(cx.idx, cx.days, cx.today);
+      return `<div class="kpis">${kpi('Reached the Health page', fmtInt(w.reached), cx.label)}${kpi('Left during the count', fmtInt(w.stopped.length), 'syncing, then no other state', null, true)}</div>`
+        + (w.reached
+          ? barRows(w.bands.map(b => ({ name: b.label, count: b.n, key: b.key })), SERIES[4],
+              { tileId: this.id, drill: r => (r.count ? 'band|' + r.key : null) })
+          : emptyHtml('Nobody reached access_blocked in this range.'))
+        + `<div class="gap-note"${w.stopped.length ? drillAttr(this.id, 'stopped|all', 'Syncing, then no other state') : ''}>Each state is logged once per install, so this is the first launch only; a cold launch repeats the count, unlogged. Left during the count = no sync was logged after syncing.${w.noZone.length ? ` ${w.noZone.length} left out: no readable zone.` : ''}</div>`;
+    },
+    table(cx) {
+      const w = healthWait(cx.idx, cx.days, cx.today);
+      return { cols: [{ key: 'label', label: 'Wait' }, { key: 'n', label: 'Installs', num: true }],
+               rows: [...w.bands.map(b => ({ label: b.label, n: b.n, _drill: b.n ? 'band|' + b.key : null })),
+                      { label: 'Left during the count', n: w.stopped.length, _drill: w.stopped.length ? 'stopped|all' : null }] };
+    },
+    drill(key, cx) {
+      const [k, v] = splitKey(key);
+      const w = healthWait(cx.idx, cx.days, cx.today);
+      if (k === 'stopped') return peopleTable(w.stopped, `Left during the count · ${w.stopped.length} installs`);
+      const b = w.bands.find(x => x.key === v);
+      return peopleTable(b ? b.people : [], `Waited ${b ? b.label : v} · ${b ? b.n : 0} installs`);
     },
   },
 
@@ -2700,7 +3140,7 @@ const TILES = [
   },
   {
     id: 'use.ai', section: 'use', title: 'AI connection',
-    def: 'Connected = latest ai_connect_state is on or read_only, of people whose phone reported one. Entries assistants logged (ai_inbox_applied) by kind; mirror syncs that failed (ai_mirror_sync). 2.1+.',
+    def: 'Connected = latest ai_connect_state on or read_only, of people reporting one. Entries assistants logged by kind; failed mirror syncs; sign-in codes and Approve in Axon by outcome (2.2+). 2.1+.',
     natural: { days: 30 }, filters: BOTH,
     view(cx) {
       const u = needIdx(cx); if (u) return u;
@@ -2712,6 +3152,14 @@ const TILES = [
         + barRows(a.inbox.map(x => ({ name: x.key, count: x.runs, persons: x.persons })), SERIES[1],
             { tileId: tid, drill: r => 'inbox|' + r.name, empty: 'No assistant logged an entry in this range.',
               fmt: r => `<b>${r.count}</b> entries · ${r.persons} people` })
+        + `<div class="mini-h">Sign-in codes asked for in the app, by what happened (2.2+)</div>`
+        + barRows(a.signin.map(x => ({ name: x.key, count: x.runs, persons: x.persons })), SERIES[2],
+            { tileId: tid, drill: r => 'signin|' + r.name, empty: 'No sign-in code was asked for in this range.',
+              fmt: r => `<b>${r.count}</b> · ${r.persons} people` })
+        + `<div class="mini-h">Approve in Axon — the Allow sheet, by what happened (2.2+)</div>`
+        + barRows(a.approve.map(x => ({ name: x.key, count: x.runs, persons: x.persons })), SERIES[3],
+            { tileId: tid, drill: r => 'approve|' + r.name, empty: 'No sign-in was approved in the app in this range.',
+              fmt: r => `<b>${r.count}</b> · ${r.persons} people` })
         + `<div class="gap-note">Of those reporting: <span${drillAttr(tid, st.on.size ? 'state|on' : null, 'Latest reading on')}>full access ${st.on.size}</span> · <span${drillAttr(tid, st.read_only.size ? 'state|read_only' : null, 'Latest reading read_only')}>read only ${st.read_only.size}</span> · <span${drillAttr(tid, st.off.size ? 'state|off' : null, 'Latest reading off')}>off ${st.off.size}</span>. No reading yet is left out, not counted as off.</div>`;
     },
     table(cx) {
@@ -2721,6 +3169,8 @@ const TILES = [
                rows: [
                  ...['on', 'read_only', 'off'].map(s => ({ group: 'Latest reading', item: s, people: a.states[s].size, entries: null, _drill: d(a.states[s].size, 'state|' + s) })),
                  ...a.inbox.map(x => ({ group: 'Entries by assistants', item: x.key, people: x.persons, entries: x.runs, _drill: 'inbox|' + x.key })),
+                 ...a.signin.map(x => ({ group: 'Sign-in codes', item: x.key, people: x.persons, entries: x.runs, _drill: 'signin|' + x.key })),
+                 ...a.approve.map(x => ({ group: 'Approve in Axon', item: x.key, people: x.persons, entries: x.runs, _drill: 'approve|' + x.key })),
                  { group: 'Mirror sync', item: 'failed at least once', people: a.failedIds.size, entries: null, _drill: d(a.failedIds.size, 'mirror|failed') },
                  { group: 'Mirror sync', item: 'synced at all', people: a.syncIds.size, entries: null, _drill: d(a.syncIds.size, 'mirror|any') },
                ] };
@@ -2731,6 +3181,8 @@ const TILES = [
       if (k === 'state' && v === 'conn') return peopleTable(peopleBy(cx, a.connIds), `Connected (on or read_only) · ${a.connIds.size} people`);
       if (k === 'state') return peopleTable(peopleBy(cx, a.states[v] || new Set()), `Latest reading ${v} · ${(a.states[v] || new Set()).size} people`);
       if (k === 'inbox') { const g = a.inbox.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Assistant logged a ${v} · ${g ? g.persons : 0} people`); }
+      if (k === 'signin') { const g = a.signin.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Sign-in code ${v} · ${g ? g.persons : 0} people`); }
+      if (k === 'approve') { const g = a.approve.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Approve in Axon ${v} · ${g ? g.persons : 0} people`); }
       if (k === 'mirror') { const ids = v === 'failed' ? a.failedIds : a.syncIds; return peopleTable(peopleBy(cx, ids), `Mirror sync ${v === 'failed' ? 'failed at least once' : 'ran'} · ${ids.size} people`); }
       return peopleTable([], 'Nothing here');
     },
@@ -2769,6 +3221,31 @@ const TILES = [
       if (k === 'access') { const g = c.access.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Access ${v} · ${g ? g.persons : 0} people`); }
       if (k === 'kind') { const g = c.insights.find(x => x.key === v); return peopleTable(g ? peopleBy(cx, g.ids) : [], `Insight ${v} · shown to ${g ? g.shown : 0}, tapped by ${g ? g.tapped : 0}`); }
       return peopleTable([], 'Nothing here');
+    },
+  },
+  {
+    id: 'use.aitier', section: 'use', title: 'AI connection — size on disk, by day',
+    def: 'The AI connection’s tables on disk, one reading a UTC day (ai_tier_size_daily). Deleting rows does not lower it until the tables are rewritten. History only.',
+    natural: { days: 90 }, filters: { version: false, country: false },
+    view(cx) {
+      const s = aiTierSeries(cx.src.aiTier, cx.days);
+      if (!s) return unreadHtml('ai_admin_tier_history', cx.src) + `<div class="gap-note">The read comes from <code>Supabase/ai_tier_watch.sql</code>; its daily reading starts when it is applied.</div>`;
+      if (!s.readings) return emptyHtml('No reading in this range yet.');
+      return `<div class="kpis">${kpi('Latest reading', escHtml(fmtMB(s.last.bytes)), fmtDay(s.last.day))}${kpi('Readings', fmtInt(s.readings), cx.label, null, true)}</div>`
+        + lineChart({ tileId: this.id, labels: cx.days, xFmt: fmtDay, height: 120, maxTicks: 6, yFmt: fmtMB, recentDays: 7,
+            series: [{ name: 'On disk', color: SERIES[5], values: s.values }],
+            nNote: 'a day with no reading is a gap', drill: i => (s.values[i] !== null ? dayKey(cx.days[i]) : null) });
+    },
+    table(cx) {
+      const s = aiTierSeries(cx.src.aiTier, cx.days) || { values: [] };
+      return { cols: [{ key: 'day', label: 'Day (UTC)', fmt: fmtDay }, { key: 'mb', label: 'On disk', num: true, fmt: v => fmtMB(v) }],
+               rows: cx.days.map((d, i) => ({ day: d, mb: s.values[i] === undefined ? null : s.values[i], _drill: s.values[i] !== null && s.values[i] !== undefined ? dayKey(d) : null })) };
+    },
+    drill(key, cx) {
+      const [, d] = splitKey(key);
+      const r = (cx.src.aiTier || []).find(x => String(x.day) === d);
+      return { title: `AI tier on ${fmtDay(d)}`, cols: [{ key: 'day', label: 'Day (UTC)', fmt: fmtDay }, { key: 'bytes', label: 'Bytes on disk', num: true }, { key: 'mb', label: 'On disk', fmt: v => fmtMB(v) }],
+               rows: r ? [{ day: d, bytes: Number(r.bytes), mb: Number(r.bytes) }] : [], empty: 'No reading that day.' };
     },
   },
 
@@ -2879,7 +3356,8 @@ const TILES = [
       return `<div class="kpis">${kpi('Reached ready', rateVal(rr), rateSub(rr, 'installs'))}${kpi('Try Again taps', fmtInt(rt.taps), `${rt.persons} people`, null, true)}${kpi('Taps that worked', rateVal(rt.rate), rateSub(rt.rate, 'taps'), null, true)}</div>`
         + barRows(fs.rows.filter(r => r.n > 0).map(r => ({ name: r.label, count: r.n, state: r.state, color: r.state === 'ready' ? 'var(--fine)' : 'var(--act)' })), 'var(--act)',
             { tileId: this.id, drill: r => 'state|' + r.state, fmt: r => `<b>${r.count}</b> installs`, empty: 'No first sync reported in this range.' })
-        + (rt.taps ? `<div class="gap-note"${drillAttr(this.id, 'retry|all', 'People who tapped Try Again')}>Try Again from: ${rt.byFrom.map(b => `${escHtml(b.from)} ${b.ready}/${b.taps}`).join(' · ')} (landed on ready / taps)</div>` : '');
+        + (rt.taps ? `<div class="gap-note"${drillAttr(this.id, 'retry|all', 'People who tapped Try Again')}>Try Again from: ${rt.byFrom.map(b => `${escHtml(b.from)} ${b.ready}/${b.taps}`).join(' · ')} (landed on ready / taps)</div>` : '')
+        + (ready.n ? (() => { const sp = firstSyncReadySplit(cx.idx, cx.days); return `<div class="gap-note">Reached ready: <span${sp.scored.length ? drillAttr(this.id, 'ready|scored', 'Reached ready, a score that local day') : ''}>${sp.scored.length} saw a score that local day</span> · <span${sp.none.length ? drillAttr(this.id, 'ready|none', 'Reached ready, no score that local day') : ''}>${sp.none.length} did not</span> (ready means the day held any data, steps included).</div>`; })() : '');
     },
     table(cx) {
       const fs = firstSyncWorst(cx.idx, cx.days);
@@ -2887,6 +3365,11 @@ const TILES = [
     },
     drill(key, cx) {
       const [k, v] = splitKey(key);
+      if (k === 'ready') {
+        const sp = firstSyncReadySplit(cx.idx, cx.days);
+        const list = v === 'scored' ? sp.scored : sp.none;
+        return peopleTable(list, `Reached ready, ${v === 'scored' ? 'a score' : 'no score'} that local day · ${list.length} installs`);
+      }
       if (k === 'retry') {
         const set = new Set(cx.days);
         return peopleTable(cx.idx.list.filter(p => p.rows.some(r => r.event === 'first_sync_retried' && set.has(r.day))), 'Tapped Try Again');
@@ -3436,6 +3919,15 @@ function buildDemo(opts) {
   const pick3 = arr => arr[Math.floor(rnd3() * arr.length)];
   // Notification permission (Oct 15 2026, 2.1.1) draws from a FOURTH stream, for the same reason.
   const rnd4 = mulberry32(20261015);
+  // The first day (Oct 17 2026 audit, fix 1) draws from a FIFTH stream: onboarding pages, night installs,
+  // the Health page arc, a first-day Watch reading, and a few more leavers and decliners. A person it
+  // turns into a leaver or a decliner skips the grant block's draws, as such a person would.
+  const rnd5 = mulberry32(20261017);
+  const pick5 = arr => arr[Math.floor(rnd5() * arr.length)];
+  // Sign-in codes (2.2, Oct 24 2026) draw from a SIXTH stream, for the same reason.
+  const rnd6 = mulberry32(20261024);
+  // Approve in Axon (Nov 4 2026) — its own stream, so every older demo number stays put.
+  const rnd7 = mulberry32(20261104);
   const today = opts.today || todayIST();
   const last = lastCompleteDay(today);
   const SPAN = 70;
@@ -3446,7 +3938,8 @@ function buildDemo(opts) {
   const MODELS = ['iPhone16,2', 'iPhone15,3', 'iPhone17,1', 'iPhone14,5', 'iPhone16,1', 'iPhone17,3', 'iPhone13,2', 'iPhone15,4', 'iPhone18,1'];
   const OSES = ['26.0', '26.0.1', '18.6', '26.0', '18.7', '26.1'];
   // Release day of each version, relative to the last complete day.
-  const RELEASES = [['1.9.4', -80], ['1.9.5', -38], ['1.9.6', -21], ['1.9.7', -3], ['2.1.1', -2]];
+  // 2.1 (Oct 15 2026: the Health page's 2.1+ rows, Ask Axon, the AI connection) sits between 1.9.7 and 2.1.1.
+  const RELEASES = [['1.9.4', -80], ['1.9.5', -38], ['1.9.6', -21], ['1.9.7', -14], ['2.1', -7], ['2.1.1', -2]];
   const versionOn = (day, lag, frozen) => {
     let v = RELEASES[0][0];
     for (const [ver, off] of RELEASES) if (shiftDay(last, off + lag) <= day) v = ver;
@@ -3492,7 +3985,8 @@ function buildDemo(opts) {
     const t4 = { asked: rnd4() < 0.8, allowed: rnd4() < 0.7, appOff: rnd4() < 0.12, said: false };
 
     if (!p.legacy) {
-      const h0 = 9 + Math.floor(rnd() * 9);
+      const hDay = 9 + Math.floor(rnd() * 9);
+      const h0 = rnd5() < 0.15 ? Math.floor(rnd5() * 9) : hDay;
       push(p, p.installDay, h0, 'app_first_launch');
       activeDays.add(p.installDay);
       funnelLogs.push({ id: 'f' + p.pid, message: 'funnel:app_first_launch', created_at: utcAtLocalHour(p.installDay, p.tzReal, h0),
@@ -3503,14 +3997,26 @@ function buildDemo(opts) {
         push(p, p.installDay, h0, 'sign_in', 'failure:error:unknown', 6);
         continue;
       }
-      const onboard = rnd() < 0.93;
+      // A few more leave during onboarding (rnd5); the older draws below are made exactly as before.
+      const onboardDraw = rnd() < 0.93;
+      const onboard = onboardDraw && rnd5() >= 0.12;
+      // onboarding_step page:1–4 on each page change (rnd5); a leaver stops on a page, sometimes after a swipe back.
+      const lastPage = onboard ? 4 : 1 + Math.floor(rnd5() * 4);
+      for (let pg = 1; pg <= lastPage; pg++) push(p, p.installDay, h0, 'onboarding_step', 'page:' + pg, 0.3 * pg);
+      if (!onboard && lastPage > 1 && rnd5() < 0.3) push(p, p.installDay, h0, 'onboarding_step', 'page:' + (lastPage - 1), 1.5);
       if (onboard) push(p, p.installDay, h0, 'onboarding_complete', undefined, 2);
-      const granted = onboard && rnd() < 0.90;
-      push(p, p.installDay, h0, 'healthkit_authorized', 'granted:' + (granted ? 'true' : 'false'), 3);
+      const grantDraw = onboardDraw ? rnd() < 0.90 : false;
+      // …and a few more get nothing from Health (rnd5), so the Health page tiles have people in them.
+      const granted = onboard && grantDraw && rnd5() >= 0.15;
+      // The Health sheet opens on page 4 (page:3): a leaver who never got there never answered it.
+      if (onboard || lastPage >= 3) push(p, p.installDay, h0, 'healthkit_authorized', 'granted:' + (granted ? 'true' : 'false'), 3);
       if (granted) {
+        // A few stop while the history is still being read (rnd5): no later state, no sync, no score that day.
+        const stopReading = rnd5() < 0.05;
         push(p, p.installDay, h0, 'first_sync_state', 'state:syncing', 4);
         const ok = rnd() < 0.86;
-        if (ok) push(p, p.installDay, h0, 'first_sync_state', 'state:ready', 5);
+        if (stopReading) { /* the draws below are still made */ }
+        else if (ok) push(p, p.installDay, h0, 'first_sync_state', 'state:ready', 5);
         else {
           const why = pick(['access_blocked', 'error', 'no_data_yet']);
           push(p, p.installDay, h0, 'first_sync_state', 'state:' + why, 5);
@@ -3518,8 +4024,21 @@ function buildDemo(opts) {
           push(p, p.installDay, h0, 'first_sync_retried', `from:${why}|to:${healed ? 'ready' : why}`, 7);
           if (healed) push(p, p.installDay, h0, 'first_sync_state', 'state:ready', 8);
         }
-        push(p, p.installDay, h0, 'sync_completed', 'ok', 6);
-        if (rnd() < 0.92) push(p, p.installDay, h0, 'score_visible', 'n:4', 7 + Math.floor(rnd() * 22));
+        if (!stopReading) push(p, p.installDay, h0, 'sync_completed', 'ok', 6);
+        const seen = rnd() < 0.92, seenAt = 7 + Math.floor(rnd() * 22);
+        if (seen && !stopReading) push(p, p.installDay, h0, 'score_visible', 'n:4', seenAt);
+        // watch_state fires after onboarding, once a day (rnd5).
+        if (!stopReading && rnd5() < 0.7) push(p, p.installDay, h0, 'watch_state', 'paired:' + (rnd5() < 0.7 ? 'true' : 'false') + '|app:false|complication:false', 6.5);
+      } else if (onboard) {
+        // Health shared nothing (rnd5): the history count over an empty store, then the Health page —
+        // page B only from a 2.1+ build (2.0's page B was the false one).
+        push(p, p.installDay, h0, 'first_sync_state', 'state:syncing', 4);
+        if (rnd5() < 0.85) {
+          const at = 4 + pick5([4, 8, 15, 25, 45, 70, 150, 400, 900]) / 60;
+          push(p, p.installDay, h0, 'first_sync_state', 'state:access_blocked', at);
+          p.blocked = true;
+          if (semverCmp(versionOn(p.installDay, p.lag, p.frozen), '2.1') >= 0) push(p, p.installDay, h0, 'health_access_shown', 'state:b', at + 0.1);
+        }
       }
       if (p.signedIn) {
         if (rnd() < 0.3) push(p, p.installDay, h0, 'sign_in', pick(['failure:cancelled', 'failure:error:network', 'failure:error']), 8);
@@ -3546,8 +4065,18 @@ function buildDemo(opts) {
       if (night && old) push(p, day, hour, 'sync_failed', 'error');
       else if (rnd() < 0.06) push(p, day, hour, 'sync_failed', old ? 'error' : pick(['error:db_locked', 'error:db_locked', 'error:query', 'error:save']));
       else {
-        push(p, day, hour, 'sync_completed', rnd() < 0.15 ? 'no_watch_data' : 'ok');
-        if (rnd() < 0.9) push(p, day, hour, 'score_visible', 'n:4');
+        // Health shared nothing (rnd5): page B once a day from a 2.1+ build, its taps, and sometimes the
+        // switch flipped in Health — then the true row, ready, and scores from that day on.
+        if (p.blocked && semverCmp(versionOn(day, p.lag, p.frozen), '2.1') >= 0) {
+          push(p, day, hour, 'health_access_shown', 'state:b', 0.5);
+          if (rnd5() < 0.5) push(p, day, hour, 'health_access_cta', rnd5() < 0.1 ? 'open_settings' : 'open_health', 0.6);
+          if (rnd5() < 0.3) push(p, day, hour, 'health_access_cta', 'check_again', 0.7);
+          if (rnd5() < 0.4) { p.blocked = false; push(p, day, hour, 'healthkit_authorized', 'granted:true', 0.8); push(p, day, hour, 'first_sync_state', 'state:ready', 0.9); }
+        }
+        const noWatch = rnd() < 0.15;
+        if (p.blocked) push(p, day, hour, 'sync_failed', 'healthkit_denied');
+        else push(p, day, hour, 'sync_completed', noWatch ? 'no_watch_data' : 'ok');
+        if (rnd() < 0.9 && !p.blocked) push(p, day, hour, 'score_visible', 'n:4');
       }
       // 2.1.1 removed the Fit Age tab (its page opens from Home, logged as fitness_age_viewed below).
       // The draws stay the same; a 2.1.1+ build just never sends tab_viewed fit_age.
@@ -3578,6 +4107,14 @@ function buildDemo(opts) {
         if (aiSt !== 'off') {
           if (rnd2() < 0.2) push(p, day, hour, 'ai_inbox_applied', 'kind:' + pick2(['checkin', 'checkin', 'food', 'food', 'nap']), 12);
           if (rnd2() < 0.5) push(p, day, hour, 'ai_mirror_sync', rnd2() < 0.12 ? 'failed' : 'ok', 13);
+          if (rnd6() < 0.06) {
+            const r = rnd6();
+            push(p, day, hour, 'ai_signin_code', 'state:' + (r < 0.7 ? 'shown' : r < 0.82 ? 'expired' : r < 0.9 ? 'failed' : r < 0.95 ? 'throttled' : r < 0.98 ? 'off' : 'unavailable'), 16);
+          }
+          if (rnd7() < 0.05) {
+            const r = rnd7();
+            push(p, day, hour, 'ai_signin_approve', 'state:' + (r < 0.45 ? 'shown' : r < 0.85 ? 'allowed' : r < 0.9 ? 'cancelled' : r < 0.94 ? 'expired' : r < 0.96 ? 'failed' : r < 0.98 ? 'throttled' : r < 0.99 ? 'off' : 'unavailable'), 17);
+          }
         }
       }
       const calIsOn = t2.calOn && day >= t2.calDay && !(t2.calRevoke && day >= shiftDay(t2.calDay, 20));
@@ -3666,15 +4203,23 @@ function buildDemo(opts) {
     { day: shiftDay(last, -1), storefront: 'in', version: '1.9.6', rating_count: 3, avg_rating: 5, text_reviews: null, taken_at: iso(30) },
   ];
 
+  // The AI tier's daily size (ai_tier_watch.sql): readings from 2.1's launch on, growing, with a
+  // missed day — a gap, never a zero. Deterministic, no random draw.
+  const aiTier = [];
+  for (let k = 40; k >= 0; k--) {
+    if (k === 6) continue;
+    aiTier.push({ day: shiftDay(last, -k), bytes: Math.round(4587520 + (40 - k) * 61440 + ((40 - k) % 7) * 20480) });
+  }
+
   fleet.sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
-  if (opts.empty) return { fleet: [], excluded: [], downloads: [], syncRuns: runs, funnelLogs: [], writeFails: [], profiles: [], feedback: [], store: [] };
-  return { fleet, excluded, downloads, syncRuns: runs, funnelLogs, writeFails, profiles, feedback, store };
+  if (opts.empty) return { fleet: [], excluded: [], downloads: [], syncRuns: runs, funnelLogs: [], writeFails: [], profiles: [], feedback: [], store: [], aiTier: [] };
+  return { fleet, excluded, downloads, syncRuns: runs, funnelLogs, writeFails, profiles, feedback, store, aiTier };
 }
 function loadDemo(opts) {
   const f = buildDemo(opts);
   D.demo = true;
   Object.assign(D, { fleet: f.fleet, fleetCapped: false, excluded: f.excluded, downloads: f.downloads, syncRuns: f.syncRuns,
-                     funnelLogs: f.funnelLogs, funnelCapped: false, writeFails: f.writeFails, profiles: f.profiles, feedback: f.feedback, store: f.store });
+                     funnelLogs: f.funnelLogs, funnelCapped: false, writeFails: f.writeFails, profiles: f.profiles, feedback: f.feedback, store: f.store, aiTier: f.aiTier });
   invalidate();
   showPage();
   el('refresh-btn').style.display = 'none';
@@ -4208,10 +4753,14 @@ function runSelfTest() {
   // ── P2. 2.1 tiles: Ask Axon, the AI connection, Calendar (history only) ─
   {
     const IDS = ['use.askaxon', 'use.ai', 'use.calendar'];
-    const EVENTS_21 = ['intent_run', 'ai_connect_state', 'ai_inbox_applied', 'ai_mirror_sync', 'calendar_access', 'calendar_state', 'calendar_insight_shown', 'calendar_insight_tapped'];
+    const EVENTS_21 = ['intent_run', 'ai_connect_state', 'ai_inbox_applied', 'ai_mirror_sync', 'ai_signin_code', 'ai_signin_approve', 'calendar_access', 'calendar_state', 'calendar_insight_shown', 'calendar_insight_tapped'];
     const VOCAB = {
       intent_run: ['kind:today', 'kind:score', 'kind:explain', 'kind:checkin', 'kind:nap', 'kind:brief'],
       ai_connect_state: ['on', 'off', 'read_only'], ai_inbox_applied: ['kind:checkin', 'kind:food', 'kind:nap'], ai_mirror_sync: ['ok', 'failed'],
+      // AISignIn.codePayloads (2.2) — the app's closed vocabulary, verbatim.
+      ai_signin_code: ['state:shown', 'state:expired', 'state:throttled', 'state:off', 'state:unavailable', 'state:failed'],
+      // AISignInApprove.payloads (2.2, Approve in Axon) — verbatim.
+      ai_signin_approve: ['state:shown', 'state:allowed', 'state:cancelled', 'state:expired', 'state:throttled', 'state:off', 'state:unavailable', 'state:failed'],
       calendar_access: ['granted', 'denied', 'revoked'], calendar_state: ['on', 'off'],
       calendar_insight_shown: ['kind:meetings', 'kind:late', 'kind:early'], calendar_insight_tapped: ['kind:meetings', 'kind:late', 'kind:early'],
     };
@@ -4240,6 +4789,7 @@ function runSelfTest() {
       fe('b', '2026-09-16', 'ai_connect_state', 'read_only'), fe('c', '2026-09-16', 'ai_connect_state', 'off'), fe('d', '2026-09-16', 'tab_viewed', 'body'),
       fe('a', '2026-09-17', 'ai_inbox_applied', 'kind:food'), fe('a', '2026-09-17', 'ai_inbox_applied', 'kind:food'), fe('b', '2026-09-17', 'ai_inbox_applied', 'kind:nap'),
       fe('a', '2026-09-17', 'ai_mirror_sync', 'ok'), fe('a', '2026-09-17', 'ai_mirror_sync', 'failed'), fe('b', '2026-09-17', 'ai_mirror_sync', 'ok'),
+      fe('a', '2026-09-17', 'ai_signin_code', 'state:shown'), fe('a', '2026-09-17', 'ai_signin_code', 'state:expired'), fe('a', '2026-09-17', 'ai_signin_code', 'state:shown'), fe('b', '2026-09-17', 'ai_signin_code', 'state:throttled'),
       fe('a', '2026-09-16', 'calendar_state', 'off', { ts: '2026-09-16T05:00:00Z' }), fe('a', '2026-09-17', 'calendar_state', 'on', { ts: '2026-09-17T05:00:00Z' }), fe('b', '2026-09-16', 'calendar_state', 'off'),
       fe('a', '2026-09-17', 'calendar_access', 'granted'), fe('b', '2026-09-17', 'calendar_access', 'denied'),
       fe('a', '2026-09-17', 'calendar_insight_shown', 'kind:meetings'), fe('b', '2026-09-17', 'calendar_insight_shown', 'kind:meetings'),
@@ -4251,6 +4801,8 @@ function runSelfTest() {
     eq('ai: Connected counts the LATEST reading, and only people who reported one', [u1.conn.text, u1.known], ['2 of 3', 3]);
     eq('ai: entries by assistants, by kind', u1.inbox.map(x => [x.key, x.persons, x.runs]), [['food', 1, 2], ['nap', 1, 1]]);
     eq('ai: mirror failures are people with at least one failed sync ÷ people who synced', u1.fail.text, '1 of 2');
+    eq('ai: sign-in codes by outcome — people and times (2.2)', u1.signin.map(x => [x.key, x.persons, x.runs]), [['shown', 1, 2], ['expired', 1, 1], ['throttled', 1, 1]]);
+    eq('ai: no sign-in code is a gap, never a zero', aiUse(buildIndex([fe('z', '2026-09-17', 'tab_viewed', 'body')], [], TODAY), completeDays(TODAY, 7)).signin, []);
     const c1 = calendarUse(R1, rd);
     eq('calendar: on is the latest reading', c1.on.text, '1 of 2');
     eq('calendar: access outcomes by people', c1.access.map(x => [x.key, x.persons]), [['denied', 1], ['granted', 1]]);
@@ -4368,6 +4920,224 @@ function runSelfTest() {
     ok('fit age home: the older-build side opens a non-empty slice of anonymous people (the 2.1.1+ side only draws a drill when someone opened)', fKeys.includes('fa|before') && fKeys.every(k => { const d = ft.drill.call(ft, k, fcx); return d && d.rows.length && d.rows.every(r => /^#[0-9a-f]{7}$/.test(r.who)); }));
     const fTxt = strip(fFace.slice(fFace.indexOf('Fit Age opens per 100'))) + ' ' + strip(JSON.stringify(fRows)) + ' ' + ft.def.slice(ft.def.indexOf('Below'));
     eq('D-37: no verdict, target, goal, kill, pace or projection word in the Fit Age read', (fTxt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|watch|late after|nothing to decide|baseline)\b/i) || [null])[0], null);
+  }
+
+  // ── P5. The first day (Oct 17 2026 first-day score audit, fix 1) ────────
+  {
+    const NY = 'America/New_York', KOL = 'Asia/Kolkata';
+    const at = (pid, iso, event, data, o) => fe(pid, '', event, data, Object.assign({ ts: iso }, o || {}));
+    // G1 — Health granted is ANY granted:true row.
+    const g1 = buildIndex([
+      at('r', '2026-09-10T05:00:00Z', 'healthkit_authorized', 'granted:false'), at('r', '2026-09-11T05:00:00Z', 'healthkit_authorized', 'granted:true'),
+      fe('d', '2026-09-10', 'healthkit_authorized', 'granted:false'), fe('g', '2026-09-10', 'healthkit_authorized', 'granted:true'),
+      fe('o', '2026-09-10', 'healthkit_authorized', 'granted:oops'),
+    ], [], TODAY);
+    eq('G1: granted = any granted:true row — a rescued decliner counts; a lone false or an odd payload does not',
+       ['r', 'd', 'g', 'o'].map(id => hkGranted(g1.persons.get(id))), [true, false, true, false]);
+    // G2 — a landed sync is ANY sync_completed row.
+    const g2 = buildIndex([...['ok', 'no_watch_data', 'partial', 'day_not_started'].map((d, i) => fe('s' + i, '2026-09-10', 'sync_completed', d)),
+                           fe('f', '2026-09-10', 'sync_failed', 'error:query')], [], TODAY);
+    eq('G2: a landed sync = any sync_completed (no_watch_data, partial, day_not_started included); a failure is not one',
+       ['s0', 's1', 's2', 's3', 'f'].map(id => syncLanded(g2.persons.get(id))), [true, true, true, true, false]);
+    // What G1 + G2 move on the two existing funnels.
+    const fun = buildIndex([
+      fe('x', '2026-09-10', 'app_first_launch'), fe('x', '2026-09-10', 'onboarding_complete'), at('x', '2026-09-10T06:01:00Z', 'healthkit_authorized', 'granted:false'),
+      fe('x', '2026-09-11', 'healthkit_authorized', 'granted:true'), fe('x', '2026-09-11', 'sync_completed', 'ok'), fe('x', '2026-09-11', 'score_visible', 'n:2'),
+      fe('y', '2026-09-10', 'app_first_launch'), fe('y', '2026-09-10', 'onboarding_complete'), fe('y', '2026-09-10', 'healthkit_authorized', 'granted:true'),
+      fe('y', '2026-09-10', 'sync_completed', 'no_watch_data'), fe('y', '2026-09-10', 'score_visible', 'n:1'),
+    ], [], TODAY);
+    const funSteps = installFunnel(installsIn(fun, completeDays(TODAY, 30)));
+    eq('G1+G2: the step funnel carries a rescued decliner and a no-Watch install through to Saw a score (before: they stopped at Granted Health and First sync landed)',
+       ['health', 'sync', 'score'].map(k => funSteps.find(s => s.key === k).n), [2, 2, 2]);
+    eq('G1: the week funnel counts the rescued decliner as granted, and their score', ['health', 'score'].map(k => funnelByWeek(null, fun, ['2026-09-07'], '2026-09-13')[0].steps.find(s => s.key === k).n), [2, 2]);
+
+    // G4 — local days from the row’s own zone.
+    eq('local day: 03:00 UTC is still the day before in New York', localDay('2026-09-18T03:00:00Z', NY), '2026-09-17');
+    eq('local day: and already that day in Kolkata', localDay('2026-09-18T03:00:00Z', KOL), '2026-09-18');
+    eq('local day: an unreadable or missing zone, or a bad time, is null — never a guessed day', [localDay('2026-09-18T03:00:00Z', 'Mars/Phobos'), localDay('2026-09-18T03:00:00Z', null), localDay('x', NY)], [null, null, null]);
+    eq('local day: New York, 00:30 on the morning the clocks go back', localDay('2026-11-01T04:30:00Z', NY), '2026-11-01');
+    eq('local day: a day counts as over everywhere only once IST is two days past it', [localDayIsOver('2026-09-17', TODAY), localDayIsOver('2026-09-18', TODAY)], [true, false]);
+
+    // The first-day groups, on a hand-built warehouse. Installs on 15 Sep (local), TODAY = 19 Sep.
+    const base = (pid, tz, iso) => [at(pid, iso, 'app_first_launch', undefined, { tz })];
+    const home = (pid, tz, iso) => [...base(pid, tz, iso), at(pid, iso.replace(':00:00Z', ':02:00Z'), 'onboarding_complete', undefined, { tz })];
+    const k = (iso, m) => new Date(new Date(iso).getTime() + m * 60000).toISOString();
+    const T0 = '2026-09-15T05:00:00Z';   // 10:30 in Kolkata
+    const rows = [
+      // US: 08:00 local install (a night install), an evening reopen on the SAME local day — the next IST day.
+      ...home('us', NY, '2026-09-15T12:00:00Z'), at('us', '2026-09-15T12:05:00Z', 'score_visible', 'n:4', { tz: NY }), at('us', '2026-09-16T01:00:00Z', 'app_open', undefined, { tz: NY }),
+      // Background wake only on the next local day — not a return.
+      ...home('bg', KOL, T0), at('bg', k(T0, 5), 'score_visible', 'n:4', { tz: KOL }),
+      at('bg', '2026-09-16T01:00:00Z', 'score_computed', 'first:false', { tz: KOL }), at('bg', '2026-09-16T01:01:00Z', 'vo2max_coverage', 'present:true', { tz: KOL }), at('bg', '2026-09-16T01:02:00Z', 'anchor_freeze', 'set', { tz: KOL }),
+      // Each foreground event alone is a return.
+      ...['app_open', 'session_state', 'tab_viewed', 'app_close'].flatMap(e => [...home('fg_' + e, KOL, T0), at('fg_' + e, k(T0, 5), 'score_visible', 'n:4', { tz: KOL }), at('fg_' + e, '2026-09-16T06:00:00Z', e, e === 'tab_viewed' ? 'body' : undefined, { tz: KOL })]),
+      // Left during onboarding: pages 1–3, the sheet answered, a swipe back.
+      ...base('ob', KOL, T0), at('ob', k(T0, 1), 'onboarding_step', 'page:1', { tz: KOL }), at('ob', k(T0, 2), 'onboarding_step', 'page:2', { tz: KOL }), at('ob', k(T0, 3), 'onboarding_step', 'page:3', { tz: KOL }),
+      at('ob', k(T0, 4), 'healthkit_authorized', 'granted:false', { tz: KOL }), at('ob', k(T0, 5), 'onboarding_step', 'page:2', { tz: KOL }),
+      ...base('ob0', KOL, T0),
+      // Health shared nothing, 45 s from syncing to access_blocked.
+      ...home('hn', KOL, T0), at('hn', k(T0, 3), 'healthkit_authorized', 'granted:false', { tz: KOL }), at('hn', k(T0, 4), 'first_sync_state', 'state:syncing', { tz: KOL }), at('hn', k(T0, 4.75), 'first_sync_state', 'state:access_blocked', { tz: KOL }),
+      // access_blocked but granted:true the same day is not "shared nothing".
+      ...home('hn2', KOL, T0), at('hn2', k(T0, 3), 'healthkit_authorized', 'granted:true', { tz: KOL }), at('hn2', k(T0, 4), 'first_sync_state', 'state:access_blocked', { tz: KOL }),
+      // Stopped while reading history.
+      ...home('rd', KOL, T0), at('rd', k(T0, 3), 'healthkit_authorized', 'granted:true', { tz: KOL }), at('rd', k(T0, 4), 'first_sync_state', 'state:syncing', { tz: KOL }),
+      // Home, no score: the day’s LATEST watch reading says no Watch.
+      ...home('nw', KOL, T0), at('nw', k(T0, 4), 'first_sync_state', 'state:ready', { tz: KOL }), at('nw', k(T0, 5), 'watch_state', 'paired:true|app:false|complication:false', { tz: KOL }), at('nw', k(T0, 9), 'watch_state', 'paired:false|app:false|complication:false', { tz: KOL }),
+      ...home('wu', KOL, T0), at('wu', k(T0, 4), 'first_sync_state', 'state:ready', { tz: KOL }),
+      // A score beats "shared nothing" (the score is what the person saw).
+      ...home('sch', KOL, T0), at('sch', k(T0, 3), 'healthkit_authorized', 'granted:false', { tz: KOL }), at('sch', k(T0, 9), 'score_visible', 'n:1', { tz: KOL }),
+      // A score at 09:00 local is not a night install; a row with no zone borrows the install’s.
+      ...home('sc', NY, '2026-09-15T13:00:00Z'), at('sc', '2026-09-15T13:05:00Z', 'score_visible', 'n:4', { tz: null }),
+      // No zone at all; and an install whose first local day may still be running.
+      ...base('nz', null, T0), ...home('run', KOL, '2026-09-18T05:00:00Z'),
+    ];
+    const ix = buildIndex(rows, [], TODAY);
+    const days30 = completeDays(TODAY, 30);
+    const fdp = firstDayPlaces(ix, days30, TODAY);
+    const ids = list => list.map(p => p.id).sort();
+    const grp = key => fdp.groups.find(g => g.key === key);
+    eq('first day: each install lands in exactly one group, the first that fits', Object.fromEntries(fdp.groups.map(g => [g.key, ids(g.people)])), {
+      onboarding: ['ob', 'ob0'], health_nothing: ['hn'], reading: ['rd'], no_watch: ['nw'], watch_unknown: ['hn2', 'wu'],
+      score: ['bg', 'fg_app_close', 'fg_app_open', 'fg_session_state', 'fg_tab_viewed', 'sc', 'sch', 'us'] });
+    eq('first day: a missing zone and a day that may still be running are left out and counted, never placed', [ids(fdp.noZone), ids(fdp.running)], [['nz'], ['run']]);
+    eq('G3: a return needs app_open, session_state, tab_viewed or app_close on the next local day — a background wake is not one',
+       ids(grp('score').back), ['fg_app_close', 'fg_app_open', 'fg_session_state', 'fg_tab_viewed']);
+    ok('G4: an evening reopen on the same local day is not "the next day" — though IST calls it day 2', !grp('score').back.some(p => p.id === 'us') && returnedD2(ix.persons.get('us')));
+    eq('G12: installed 00:00–09:00 on the install’s own clock (08:00 New York yes, 09:00 no)', ids(grp('score').night), ['us']);
+    eq('first day: a group under 20 installs prints “of n”', grp('score').share.text, `8 of ${fdp.total}`);
+    eq('first day: the D-37 vocabulary — the group is named for what was measured', FIRST_DAY_GROUPS.map(g => g.label).filter(l => /declin|refus|fail/i.test(l)), []);
+
+    // G6 — the furthest onboarding page, the Health sheet answered.
+    const ob = onboardingLeft(ix, days30, TODAY);
+    eq('onboarding: installs with a finished first local day, those who finished, those who did not', [ob.installs, ob.finished, ob.left], [fdp.total, fdp.total - 2, 2]);
+    eq('onboarding: the furthest page wins over a swipe back; no step row = the Welcome page', ob.pages.map(g => [g.page, ids(g.people), g.answered.length]),
+       [[0, ['ob0'], 0], [1, [], 0], [2, [], 0], [3, ['ob'], 1], [4, [], 0]]);
+    eq('onboarding: five pages, the order the app shows them', ONBOARDING_PAGES.length, 5);
+
+    // G11 — the wait bands, counts only.
+    const W = buildIndex([
+      ...[['w5', 5], ['w10', 10], ['w59', 59], ['w600', 600], ['w3600', 3600]].flatMap(([pid, secs]) => [at(pid, T0, 'first_sync_state', 'state:syncing', { tz: KOL }), at(pid, new Date(new Date(T0).getTime() + secs * 1000).toISOString(), 'first_sync_state', 'state:access_blocked', { tz: KOL })]),
+      at('stop', T0, 'first_sync_state', 'state:syncing', { tz: KOL }),
+      at('fine', T0, 'first_sync_state', 'state:syncing', { tz: KOL }), at('fine', k(T0, 1), 'first_sync_state', 'state:ready', { tz: KOL }),
+      at('back', T0, 'first_sync_state', 'state:access_blocked', { tz: KOL }), at('back', k(T0, 1), 'first_sync_state', 'state:syncing', { tz: KOL }),
+    ], [], TODAY);
+    const hw = healthWait(W, days30, TODAY);
+    eq('wait: each install in one band, by the gap from syncing to access_blocked (a band edge belongs to the band above)', hw.bands.map(b => [b.key, ids(b.people)]),
+       [['b10s', ['w5']], ['b30s', ['w10']], ['b1m', ['w59']], ['b3m', []], ['b10m', []], ['b10mplus', ['w3600', 'w600']]]);
+    eq('wait: syncing with no later state = left during the count; reaching ready is not in this tile; an access_blocked before syncing is skipped', [ids(hw.stopped), hw.reached], [['stop'], 5]);
+
+    // G5 — the Health page, 2.1+ rows only.
+    const H = buildIndex([
+      at('b20', '2026-09-12T05:00:00Z', 'health_access_shown', 'state:b', { v: '2.0.1' }),
+      at('b21', '2026-09-12T05:00:00Z', 'health_access_shown', 'state:b', { v: '2.1' }), at('b21', '2026-09-12T05:01:00Z', 'health_access_cta', 'open_health', { v: '2.1' }),
+      at('b21', '2026-09-13T05:00:00Z', 'first_sync_state', 'state:ready', { v: '2.1' }), at('b21', '2026-09-13T05:01:00Z', 'score_visible', 'n:3', { v: '2.1' }),
+      at('early', '2026-09-11T05:00:00Z', 'first_sync_state', 'state:ready', { v: '2.1' }), at('early', '2026-09-12T05:00:00Z', 'health_access_shown', 'state:b', { v: '2.1.1' }),
+      at('both', '2026-09-12T05:00:00Z', 'health_access_shown', 'state:b', { v: '2.1.1' }), at('both', '2026-09-12T05:01:00Z', 'health_access_cta', 'open_settings', { v: '2.1.1' }), at('both', '2026-09-12T05:02:00Z', 'health_access_cta', 'check_again', { v: '2.1.1' }),
+      at('old21', '2026-07-01T05:00:00Z', 'health_access_shown', 'state:b', { v: '2.1' }),
+      at('pa', '2026-09-12T05:00:00Z', 'health_access_shown', 'state:a', { v: '2.1' }), at('pa', '2026-09-12T05:01:00Z', 'health_access_cta', 'connect', { v: '2.1' }),
+    ], [], TODAY);
+    const hp = healthPage(H, days30);
+    eq('health page: shown = first page-B row from a 2.1+ build in the range; an older build’s page B is left out and counted', [ids(hp.shown), ids(hp.older)], [['b21', 'both', 'early'], ['b20']]);
+    eq('health page: taps by kind, then ready and a score — only from the page-B row on, each of those shown', hp.steps.map(s => [s.key, ids(s.people), s.rate.text]), [
+      ['open_health', ['b21'], '1 of 3'], ['open_settings', ['both'], '1 of 3'], ['check_again', ['both'], '1 of 3'], ['any_tap', ['b21', 'both'], '2 of 3'],
+      ['ready', ['b21'], '1 of 3'], ['score', ['b21'], '1 of 3']]);
+    eq('health page: page A shown and Connect tapped are counted beside it', [ids(hp.aShown), ids(hp.aTapped)], [['pa'], ['pa']]);
+    eq('health page: the taps are the app’s own (HealthAccess.CTA)', [...HEALTH_PAGE_TAPS.map(t => t.key), 'connect'].sort(), ['check_again', 'connect', 'open_health', 'open_settings']);
+
+    // The adversarial review's four cases (Oct 24 2026).
+    const NYT = '2026-09-15T03:55:00Z';   // 23:55 on 14 Sep in New York
+    const AV = buildIndex([
+      // An onboarding leaver who reopens on day 1 sends only onboarding pages — that is a return.
+      ...base('obr', KOL, T0), at('obr', k(T0, 1), 'onboarding_step', 'page:1', { tz: KOL }), at('obr', '2026-09-16T06:00:00Z', 'onboarding_step', 'page:1', { tz: KOL }),
+      // A .freshDay first run: syncing, then a sync logged after it, standing on Home — not "stopped while reading".
+      ...home('fresh', KOL, '2026-09-14T21:00:00Z'), at('fresh', '2026-09-14T21:03:00Z', 'healthkit_authorized', 'granted:true', { tz: KOL }),
+      at('fresh', '2026-09-14T21:04:00Z', 'sync_completed', 'day_not_started', { tz: KOL }), at('fresh', '2026-09-14T21:04:01Z', 'first_sync_state', 'state:syncing', { tz: KOL }),
+      at('fresh', '2026-09-14T21:09:00Z', 'sync_completed', 'day_not_started', { tz: KOL }), at('fresh', '2026-09-14T21:10:00Z', 'watch_state', 'paired:true|app:false|complication:false', { tz: KOL }),
+      // A session opened at 23:50 and closed at 00:10 is not a return on the next day.
+      ...home('mid', KOL, '2026-09-15T04:00:00Z'), at('mid', '2026-09-15T04:05:00Z', 'score_visible', 'n:4', { tz: KOL }), at('mid', '2026-09-15T18:40:00Z', 'app_close', 's:1200', { tz: KOL }),
+      // Onboarding finished after local midnight: left on day one in BOTH tiles, finished later.
+      ...base('late', NY, NYT), at('late', NYT.replace('03:55', '03:56'), 'onboarding_step', 'page:4', { tz: NY }), at('late', NYT.replace('03:55', '04:03'), 'onboarding_complete', undefined, { tz: NY }),
+    ], [], TODAY);
+    const av = firstDayPlaces(AV, days30, TODAY);
+    const placeOf = id => (av.groups.find(g => g.people.some(p => p.id === id)) || {}).key;
+    ok('review: an onboarding leaver who reopens on day 1 counts as back (only onboarding pages fire before Home)', av.groups.find(g => g.key === 'onboarding').back.some(p => p.id === 'obr'));
+    eq('review: a never-logged .freshDay first run (syncing, then a later sync row) is on Home, not stopped while reading', placeOf('fresh'), 'watch_unknown');
+    ok('review: and it is not "left during the count" in the wait tile', !healthWait(AV, days30, TODAY).stopped.some(p => p.id === 'fresh'));
+    ok('review: app_close counts by when its session began — 23:50 to 00:10 is not a next-day return', !av.groups.find(g => g.key === 'score').back.some(p => p.id === 'mid'));
+    const avo = onboardingLeft(AV, days30, TODAY);
+    ok('review: onboarding finished after local midnight is "left on day one" in both tiles, and counted as finished later',
+       placeOf('late') === 'onboarding' && avo.pages[4].people.some(p => p.id === 'late') && avo.laterFinished === 1);
+    eq('review: the wait tile leaves out a count that may still be running', healthWait(buildIndex([at('now', '2026-09-18T05:00:00Z', 'first_sync_state', 'state:syncing', { tz: KOL })], [], TODAY), days30, TODAY).stopped.length, 0);
+    // G8 — ready split by a score that local day.
+    const G8 = buildIndex([
+      at('rs', T0, 'first_sync_state', 'state:ready', { tz: KOL }), at('rs', k(T0, 2), 'score_visible', 'n:2', { tz: KOL }),
+      at('rn', T0, 'first_sync_state', 'state:ready', { tz: KOL }), at('rn', '2026-09-16T06:00:00Z', 'score_visible', 'n:2', { tz: KOL }),
+    ], [], TODAY);
+    const g8 = firstSyncReadySplit(G8, days30);
+    eq('G8: of the installs that reached ready, who saw a score that local day and who did not', [ids(g8.scored), ids(g8.none)], [['rs'], ['rn']]);
+
+    // The reducers read only events the app sends (EventLogService.EventType), and nothing else decides a return.
+    const src = [firstDayOf, firstDayPlace, firstDayPlaces, healthPage, onboardingLeft, healthWait, foregroundOn, syncAfter].map(String).join('\n') + [...FOREGROUND_EVENTS].map(e => `'${e}'`).join();
+    ok('events: every event the first-day reducers read is one the app sends',
+       ['app_first_launch', 'onboarding_step', 'onboarding_complete', 'healthkit_authorized', 'first_sync_state', 'score_visible', 'watch_state', 'health_access_shown', 'health_access_cta', 'sync_completed', 'sync_failed'].every(e => src.includes(`'${e}'`)));
+    eq('G3: the foreground events are the four Home sends plus the two onboarding pages send', [...FOREGROUND_EVENTS].sort(), ['app_close', 'app_open', 'onboarding_complete', 'onboarding_step', 'session_state', 'tab_viewed']);
+
+    // The four tiles: registry, copy, filters, drills, D-37 — on the demo.
+    const NEW_IDS = ['new.firstday', 'new.healthpage', 'new.onboarding', 'new.healthwait'];
+    const nt = NEW_IDS.map(id => TILES.find(t => t.id === id));
+    ok('first-day tiles: all four sit in New users, in order, right after the step funnel', nt.every(t => t && t.section === 'new') && nt.every((t, i) => TILES.indexOf(t) === TILES.findIndex(x => x.id === 'new.steps') + 1 + i));
+    eq('first-day tiles: the titles', nt.map(t => t.title), ['First day: where each install ended up', 'Apple Health page: shown, tapped, reached a score', 'Onboarding: last page reached', 'Health shared nothing: the wait before the Health page']);
+    ok('first-day tiles: each definition says its days are local and every other tile stays on IST', nt.every(t => /local/i.test(t.def) && /other tiles stay on IST/.test(t.def)));
+    ok('first-day tiles: both filters, a natural window, a drill and a table', nt.every(t => t.filters.version === true && t.filters.country === true && !!t.natural && typeof t.drill === 'function' && typeof t.table === 'function'));
+    const fToday = TODAY;
+    const fB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, buildDemo({ today: fToday, nowMs: NOW })), defaultFilters(), fToday, NOW);
+    ok('first-day tiles: each draws on the demo with people in it', nt.every(t => { const h = t.view.call(t, tileCtx(t, fB)); return h.length > 200 && /data-drill=/.test(h) && !/could not be drawn/.test(tileHtml(t, fB)); }));
+    const keysOf = h => [...h.matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').split('::')[1]);
+    const badF = [];
+    for (const t of nt) {
+      const cx = tileCtx(t, fB);
+      for (const key of [...keysOf(t.view.call(t, cx)), ...t.table(cx).rows.map(r => r._drill).filter(Boolean)]) {
+        const d = t.drill.call(t, key, cx);
+        if (!d || !d.rows.length || !d.rows.every(r => /^#[0-9a-f]{7}$/.test(r.who))) badF.push(`${t.id} ${key}`);
+      }
+    }
+    eq('first-day drills: every target on the face and in the table opens a non-empty slice of anonymous people', badF.slice(0, 5), []);
+    const fx = { idx: ix, days: days30, today: TODAY, label: 'x', src: {} };
+    const fTxt = nt.map(t => t.title + ' ' + t.def + ' ' + strip(t.view.call(t, Object.assign({}, fx, { idx: ix }))) + ' ' + strip(tileHtml(t, fB)) + ' ' + strip(JSON.stringify(t.table(tileCtx(t, fB)).rows))).join(' ');
+    eq('D-37: no verdict, target, goal, kill, pace or projection word in the first-day tiles', (fTxt.match(/\b(verdict|targets?|goals?|kill|pace|on pace|on track|projected|projection|forecast|should|act now|late after|nothing to decide|declined?)\b/i) || [null])[0], null);
+    ok('D-37: the first-day tiles print no threshold, only counts and shares', !/(?:above|below|over|under) \d+ ?%/.test(fTxt));
+    ok('G11: the wait tile never prints anyone’s own seconds — bands and counts only', (() => { const t = nt[3]; const cx = tileCtx(t, fB); return t.table(cx).rows.every(r => Object.keys(r).every(k2 => ['label', 'n', '_drill'].includes(k2))) && !/\b\d+(\.\d+)? ?s\b/.test(strip(t.view.call(t, cx))); })());
+    ok('first-day tiles: under 20 installs the face prints “of n”, never a bare percentage', /\bof \d+\b/.test(strip(nt[0].view.call(nt[0], fx))) && !/\d%/.test(strip(nt[0].view.call(nt[0], fx))));
+  }
+
+  // ── P-AI. The AI tier's size on disk (Oct 2026, security review go-live gap #2) ──
+  {
+    const days5 = ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'];
+    const rows = [{ day: '2026-09-14', bytes: 4587520 }, { day: '2026-09-16', bytes: 5242880 }, { day: '2026-09-17', bytes: 'x' }, { day: 'nope', bytes: 1 }];
+    const at = aiTierSeries(rows, days5);
+    eq('ai tier: bytes where a reading exists, a GAP (null) where none — never a zero; a bad row is not a reading', at.values, [4587520, null, 5242880, null, null]);
+    eq('ai tier: the latest reading and the count', [at.last, at.readings], [{ day: '2026-09-16', bytes: 5242880 }, 2]);
+    eq('ai tier: an unread source is null, never an empty history', aiTierSeries(null, days5), null);
+    eq('ai tier: MB with one decimal', [fmtMB(4587520), fmtMB(null)], ['4.4 MB', '—']);
+    const at2 = TILES.find(t => t.id === 'use.aitier');
+    ok('ai tier: the tile sits in What they use after Calendar, cannot honour version or country (says so), has a drill and a table',
+       !!at2 && TILES.indexOf(at2) === TILES.findIndex(t => t.id === 'use.calendar') + 1 && at2.filters.version === false && at2.filters.country === false
+       && typeof at2.drill === 'function' && typeof at2.table === 'function');
+    const aToday = TODAY;
+    const aB = buildBase(Object.assign({ sourceErrors: {}, fleetCapped: false, funnelCapped: false }, buildDemo({ today: aToday, nowMs: NOW })), defaultFilters(), aToday, NOW);
+    const acx = tileCtx(at2, aB);
+    const aFace = at2.view.call(at2, acx);
+    ok('ai tier: draws on the demo with a line and its latest reading', /Latest reading/.test(aFace) && /<svg/.test(aFace));
+    const aKeys = [...aFace.matchAll(/data-drill="([^"]+)"/g)].map(m => m[1].replace(/&amp;/g, '&').split('::')[1]);
+    ok('ai tier: every drill on the face and in the table opens that day’s one reading', aKeys.length > 3
+       && [...aKeys, ...at2.table(acx).rows.map(r => r._drill).filter(Boolean)].every(k => { const d = at2.drill.call(at2, k, acx); return d && d.rows.length === 1; }));
+    ok('ai tier: a day with no reading draws a gap, not a zero', (() => { const sv = aiTierSeries(aB.src.aiTier, acx.days); return sv.values.some(v => v === null) && sv.values.every(v => v === null || v > 0); })());
+    const unread = buildBase(Object.assign({ sourceErrors: { ai_admin_tier_history: 'table not found — its migration has not been applied' } }, buildDemo({ today: aToday, nowMs: NOW }), { aiTier: null }), defaultFilters(), aToday, NOW);
+    ok('ai tier: unread (the function not applied) says so and prints no number', (() => { const h = at2.view.call(at2, tileCtx(at2, unread)); return /could not be read/.test(h) && /ai_tier_watch\.sql/.test(h) && !/MB/.test(h); })());
+    const aTxt = at2.title + ' ' + at2.def + ' ' + strip(tileHtml(at2, aB)) + ' ' + strip(JSON.stringify(at2.table(acx).rows));
+    eq('D-37: no ceiling, limit, target, verdict or pace in the AI tier tile — the ceiling lives in the control panel', (aTxt.match(/\b(ceiling|limit|max|full|target|goal|verdict|kill|pace|on track|projected|projection|forecast|should|headroom|remaining|capacity)\b/i) || [null])[0], null);
+    ok('D-37: one series, no reference line', (aFace.match(/<path /g) || []).length === 1 && !/stroke-dasharray/.test(aFace));
+    ok('ai tier: the read is a POST to the read-only function, never a table', /rpc\/ai_admin_tier_history/.test(String(fetchAiTier)) && /method: 'POST'/.test(String(fetchAiTier)));
   }
 
   // ── Q. Copy and structure law ───────────────────────────────────────────
