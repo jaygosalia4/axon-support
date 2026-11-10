@@ -17,6 +17,9 @@
 ## Sign-in page (live 2026-10-27)
 `signin/` is the AI sign-in page (OAuth option B, app repo PR #14): the AI server's `/oauth/authorize` sends people here with a one-time handle in the URL fragment; they type the code from the Axon app. Private like `cockpit/` (noindex, no banner, not in the sitemap); its content policy, frame check and no-storage rule are checked by `validate_site.py`. Never add a tracker or an outside script to it. It always shows "only continue if you started this yourself" (review Oct 26). **Approve in Axon (Nov 4 2026, deploy only after `Supabase/ai_signin_app_approve.sql` is applied and the `ai` function carries `/v1/sign-in-approve`):** on an iPhone/iPad the page leads with an "Open Axon" button (`vitalscore://sign-in?r=<handle>`, the app's URL scheme from 2.2) and asks `/oauth/approve` with `via: "app"` every 2 s until the person taps Allow in Axon; the typed code sits behind "Use a code instead" (open by default on a computer).
 
+## Friends invite page (live 2026-11-10)
+`f/` is where a Friends invite link lands (`/f/#CODE`; app 2.3+, behind `feature.friends`). github.io can't host universal links, so the page reads the 6-letter code from the fragment, points "Open Axon" at `vitalscore://friend?c=CODE`, and shows the code for people who install first. Private like `signin/` (noindex, no banner, not in the sitemap); no network call, no storage, no tracker, frame check, and the code alphabet mirrors the app's `FriendCode`. `validate_site.py` checks all of it.
+
 ## Guides (added 2026-09-12 — the GTM's search layer)
 `guides/<slug>/index.html` × 6 + `guides/index.html`, shared `site.css`, `sitemap.xml`, `robots.txt`.
 Written by the one Axon chat from the brief in the Axon repo session (facts verified against the US App
